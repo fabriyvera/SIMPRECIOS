@@ -2,6 +2,7 @@
 
 import React, { useState } from 'react';
 import Link from 'next/link';
+import { useRouter } from 'next/navigation';
 import { ArrowLeft, User, Store } from 'lucide-react'; // Íconos para los roles
 
 export default function RegisterPage() {
@@ -9,6 +10,7 @@ export default function RegisterPage() {
   const [name, setName] = useState('');
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
+  const router = useRouter();
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
@@ -18,13 +20,13 @@ export default function RegisterPage() {
   return (
     <div className="min-h-screen flex items-center justify-center bg-gray-50 p-4 relative py-12">
       
-      <Link 
-        href="/" 
-        className="absolute top-6 left-6 flex items-center gap-2 text-gray-500 hover:text-orange-600 transition-colors font-medium bg-white px-4 py-2 rounded-full shadow-sm border border-gray-100"
+      <button 
+        onClick={() => router.back()} 
+        className="absolute top-6 left-6 flex items-center gap-2 text-gray-500 hover:text-orange-600 transition-colors font-medium bg-white px-4 py-2 rounded-full shadow-sm border border-gray-100 cursor-pointer"
       >
         <ArrowLeft className="w-5 h-5" />
         <span className="text-sm">Volver al inicio</span>
-      </Link>
+      </button>
 
       <div className="max-w-md w-full bg-white rounded-2xl shadow-xl p-8 border border-gray-100 mt-8 sm:mt-0">
         <h2 className="text-3xl font-extrabold text-transparent bg-clip-text bg-gradient-to-r from-orange-500 via-red-500 to-pink-500 text-center mb-2">
