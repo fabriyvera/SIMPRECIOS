@@ -1,10 +1,14 @@
 'use client';
 
 import React, { useState } from 'react';
-import Link from 'next/link';
-import { ArrowLeft } from 'lucide-react'; // Importamos el ícono
+import { ArrowLeft } from 'lucide-react';
+import { AppView } from '@/types';
 
-export default function LoginPage() {
+interface LoginViewProps {
+  onViewChange: (view: AppView) => void;
+}
+
+export default function LoginView({ onViewChange }: LoginViewProps) {
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
 
@@ -16,13 +20,14 @@ export default function LoginPage() {
   return (
     <div className="min-h-screen flex items-center justify-center bg-gray-50 p-4 relative">
       
-      <Link 
-        href="/" 
-        className="absolute top-6 left-6 flex items-center gap-2 text-gray-500 hover:text-orange-600 transition-colors font-medium bg-white px-4 py-2 rounded-full shadow-sm border border-gray-100"
+      {/* Botón de Regreso Actualizado */}
+      <button 
+        onClick={() => onViewChange("home")} 
+        className="absolute top-6 left-6 flex items-center gap-2 text-gray-500 hover:text-orange-600 transition-colors font-medium bg-white px-4 py-2 rounded-full shadow-sm border border-gray-100 cursor-pointer"
       >
         <ArrowLeft className="w-5 h-5" />
         <span className="text-sm">Volver al inicio</span>
-      </Link>
+      </button>
 
       <div className="max-w-md w-full bg-white rounded-2xl shadow-xl p-8 border border-gray-100">
         <h2 className="text-4xl font-extrabold text-transparent bg-clip-text bg-gradient-to-r from-orange-500 via-red-500 to-pink-500 text-center mb-2 pb-1">
@@ -54,9 +59,13 @@ export default function LoginPage() {
           </div>
 
           <div className="flex justify-end">
-            <Link href="/recuperar" className="text-sm font-bold text-orange-500 hover:text-pink-500 transition-colors">
+            <button 
+              type="button"
+              onClick={() => onViewChange("recuperar")}
+              className="text-sm font-bold text-orange-500 hover:text-pink-500 transition-colors cursor-pointer"
+            >
               ¿Olvidaste tu contraseña?
-            </Link>
+            </button>
           </div>
           
           <button type="submit" className="w-full bg-gradient-to-r from-orange-500 via-red-500 to-pink-500 hover:opacity-90 text-white font-bold py-3.5 rounded-xl shadow-md transition-opacity">
@@ -66,9 +75,12 @@ export default function LoginPage() {
 
         <div className="mt-8 text-center text-sm text-gray-600">
           ¿No tienes cuenta?{' '}
-          <Link href="/registro" className="text-transparent bg-clip-text bg-gradient-to-r from-orange-500 to-pink-500 font-extrabold hover:opacity-80">
+          <button 
+            onClick={() => onViewChange("registro")}
+            className="text-transparent bg-clip-text bg-gradient-to-r from-orange-500 to-pink-500 font-extrabold hover:opacity-80 cursor-pointer"
+          >
             Regístrate aquí
-          </Link>
+          </button>
         </div>
       </div>
     </div>

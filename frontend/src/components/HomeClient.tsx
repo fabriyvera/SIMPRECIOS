@@ -13,6 +13,11 @@ import { Button } from "@/components/ui/button";
 import { INITIAL_MARKETS, REFERENCE_PRICES, generatePriceHistory } from "@/lib/data";
 import { Market, AppView, PriceHistory } from "@/types";
 
+// Importamos tus nuevas vistas
+import LoginView from "@/components/LoginView";
+import RegisterView from "@/components/RegisterView";
+import RecoverView from "@/components/RecoverView";
+
 export default function HomeClient() {
   const [currentUser] = useState({
     name: "Juan Pérez",
@@ -166,6 +171,17 @@ export default function HomeClient() {
 
     return filtered;
   }, [markets, searchTerm, selectedCategory, sortBy, showOpenOnly, selectedMarketLocation]);
+
+  // ── Vista: Autenticación (A pantalla completa, sin Navbar) ────────────────
+  if (currentView === "login") {
+    return <LoginView onViewChange={handleViewChange} />;
+  }
+  if (currentView === "registro") {
+    return <RegisterView onViewChange={handleViewChange} />;
+  }
+  if (currentView === "recuperar") {
+    return <RecoverView onViewChange={handleViewChange} />;
+  }
 
   // ── Vista: panel de un puesto específico ──────────────────────────────────
   if (isVendorMode && selectedVendorMarket) {
