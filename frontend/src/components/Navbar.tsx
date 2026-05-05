@@ -50,9 +50,9 @@ export function Navbar({ currentView, onViewChange, currentUser, isVendorMode, o
 
               {/* Menú Desplegable (Dropdown) */}
               <div className="absolute right-0 mt-2 w-40 bg-white rounded-md shadow-xl py-1 z-50 hidden group-hover:block border border-gray-100">
-                <Link href="/perfil" className="block px-4 py-2 text-sm font-medium text-gray-700 hover:bg-orange-50 hover:text-orange-600 transition-colors">
+                <button onClick={() => onViewChange("perfil" as AppView)} className="block w-full text-left px-4 py-2 text-sm font-medium text-gray-700 hover:bg-orange-50 hover:text-orange-600 transition-colors">
                   Mi Perfil
-                </Link>
+                </button>
                 <button
                   onClick={() => setIsLoggedIn(false)}
                   className="block w-full text-left px-4 py-2 text-sm font-medium text-red-600 hover:bg-red-50 transition-colors"
@@ -63,18 +63,18 @@ export function Navbar({ currentView, onViewChange, currentUser, isVendorMode, o
             </div>
           ) : (
             <div className="flex items-center gap-3">
-              <Link
-                href="/login"
-                className="text-xs font-bold text-white hover:text-white/80 transition-colors drop-shadow-md"
+              <button
+                onClick={() => onViewChange("login" as AppView)}
+                className="text-xs font-bold text-white hover:text-white/80 transition-colors drop-shadow-md cursor-pointer"
               >
                 Ingresar
-              </Link>
-              <Link
-                href="/registro"
-                className="bg-white text-orange-600 text-xs font-bold px-4 py-2 rounded-full shadow-lg hover:bg-gray-100 transition-colors"
+              </button>
+              <button
+                onClick={() => onViewChange("registro" as AppView)}
+                className="bg-white text-orange-600 text-xs font-bold px-4 py-2 rounded-full shadow-lg hover:bg-gray-100 transition-colors cursor-pointer"
               >
                 Registrarse
-              </Link>
+              </button>
             </div>
           )}
           {/* --- FIN DE MÓDULO DE GESTIÓN DE USUARIOS --- */}
