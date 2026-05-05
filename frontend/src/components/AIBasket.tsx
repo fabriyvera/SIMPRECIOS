@@ -13,6 +13,7 @@ interface AIBasketProps {
   markets: Market[];
 }
 
+
 interface BasketItem {
   productName: string;
   quantity: number;
