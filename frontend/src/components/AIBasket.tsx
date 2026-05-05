@@ -1,11 +1,13 @@
 "use client";
 
 import { useState } from "react";
-import { Sparkles, Users, DollarSign, ShoppingCart, TrendingDown, CheckCircle } from "lucide-react";
+import { Sparkles, Users, DollarSign, ShoppingCart, TrendingDown, CheckCircle, AlertTriangle, Save } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Market } from "@/types";
+// Importarás tu cliente de Supabase aquí cuando estés listo para la HU-42
+// import { createClient } from "@/utils/supabase/client";
 
 interface AIBasketProps {
   markets: Market[];
@@ -27,6 +29,7 @@ interface GeneratedBasket {
   savings: number;
   membersServed: number;
   weeklyBudget: number;
+  daysCovered: number; // Nuevo: Para HU-43
 }
 
 const ESSENTIALS = [
@@ -48,8 +51,10 @@ const CATEGORY_ICONS: Record<string, string> = { Verduras: "🥬", Pollo: "🍗"
 export function AIBasket({ markets }: AIBasketProps) {
   const [members, setMembers] = useState("4");
   const [budget, setBudget] = useState("500");
+  const [meatPreference, setMeatPreference] = useState("Mixto"); // Nuevo: Para HU-41
   const [generatedBasket, setGeneratedBasket] = useState<GeneratedBasket | null>(null);
   const [isGenerating, setIsGenerating] = useState(false);
+  const [isSaving, setIsSaving] = useState(false);
 
   const generateBasket = () => {
     setIsGenerating(true);
@@ -58,12 +63,23 @@ export function AIBasket({ markets }: AIBasketProps) {
       const weeklyBudget = parseFloat(budget) || 500;
       const scaleFactor = numMembers / 4;
       const basket: BasketItem[] = [];
+      
       let remainingBudget = weeklyBudget;
+      let requiredCost = 0; // Para calcular si el dinero alcanza para los 7 días
 
-      for (const essential of ESSENTIALS) {
+      // HU-41: Filtrar el arreglo base según la preferencia de carne
+      let filteredEssentials = ESSENTIALS;
+      if (meatPreference === "Solo Pollo") {
+        filteredEssentials = ESSENTIALS.filter(item => item.category !== "Carne");
+      } else if (meatPreference === "Solo Res") {
+        filteredEssentials = ESSENTIALS.filter(item => item.category !== "Pollo");
+      }
+
+      for (const essential of filteredEssentials) {
         const quantity = Math.ceil(essential.baseQty * scaleFactor);
         let bestMarket: Market | null = null;
         let bestPrice = essential.basePrice;
+        
         for (const market of markets) {
           const product = market.products.find((p) => p.name === essential.name);
           if (product?.available && product.price <= bestPrice) {
@@ -71,7 +87,10 @@ export function AIBasket({ markets }: AIBasketProps) {
             bestMarket = market;
           }
         }
+        
         const totalPrice = quantity * bestPrice;
+        requiredCost += totalPrice; // Sumamos al costo ideal
+
         if (bestMarket && remainingBudget >= totalPrice) {
           basket.push({ productName: essential.name, quantity, unitPrice: bestPrice, totalPrice, marketName: bestMarket.name, marketColor: bestMarket.color, category: essential.category });
           remainingBudget -= totalPrice;
@@ -79,9 +98,42 @@ export function AIBasket({ markets }: AIBasketProps) {
       }
 
       const totalCost = basket.reduce((s, i) => s + i.totalPrice, 0);
-      setGeneratedBasket({ items: basket, totalCost, savings: weeklyBudget - totalCost, membersServed: numMembers, weeklyBudget });
+      
+      // HU-43: Calcular para cuántos días alcanza el presupuesto si no cubre el requiredCost
+      let daysCovered = 7;
+      if (weeklyBudget < requiredCost) {
+        daysCovered = Math.max(1, Math.floor((weeklyBudget / requiredCost) * 7));
+      }
+
+      setGeneratedBasket({ 
+        items: basket, 
+        totalCost, 
+        savings: weeklyBudget - totalCost, // Calculamos el ahorro en base al costo ideal
+        membersServed: numMembers, 
+        weeklyBudget,
+        daysCovered 
+      });
       setIsGenerating(false);
     }, 1500);
+  };
+
+  // HU-42: Función para guardar en Base de Datos (Supabase)
+  const handleSaveBasket = async () => {
+    setIsSaving(true);
+    try {
+      // Aquí irá tu lógica de Supabase usando src/utils/supabase/client.ts
+      // const supabase = createClient();
+      // await supabase.from('saved_baskets').insert([{ user_id: '123', items: generatedBasket?.items, total: generatedBasket?.totalCost }]);
+      
+      // Simulamos la latencia de la BD
+      await new Promise(resolve => setTimeout(resolve, 1000));
+      alert("¡Canasta guardada exitosamente en tu perfil!");
+    } catch (error) {
+      console.error(error);
+      alert("Error al guardar la canasta");
+    } finally {
+      setIsSaving(false);
+    }
   };
 
   const groupByCategory = (items: BasketItem[]) => {
@@ -110,14 +162,28 @@ export function AIBasket({ markets }: AIBasketProps) {
             <div>
               <Label className="flex items-center gap-2 mb-2 text-sm"><Users className="w-4 h-4 text-blue-600" />Cantidad de Integrantes</Label>
               <Input type="number" min="1" max="20" value={members} onChange={(e) => setMembers(e.target.value)} placeholder="Ej: 4" className="text-base h-11" />
-              <p className="text-xs text-gray-500 mt-1">Número de personas en tu hogar</p>
             </div>
+            
             <div>
               <Label className="flex items-center gap-2 mb-2 text-sm"><DollarSign className="w-4 h-4 text-green-600" />Presupuesto Semanal (Bs.)</Label>
-              <Input type="number" min="100" max="5000" step="50" value={budget} onChange={(e) => setBudget(e.target.value)} placeholder="Ej: 500" className="text-base h-11" />
-              <p className="text-xs text-gray-500 mt-1">Tu presupuesto disponible</p>
+              <Input type="number" min="50" max="5000" step="50" value={budget} onChange={(e) => setBudget(e.target.value)} placeholder="Ej: 500" className="text-base h-11" />
             </div>
-            <Button onClick={generateBasket} disabled={isGenerating} className="w-full bg-gradient-to-r from-purple-600 to-pink-600 text-white h-11">
+
+            {/* HU-41: Nuevo Select para la preferencia de carne */}
+            <div>
+              <Label className="flex items-center gap-2 mb-2 text-sm">🥩 Preferencia de Carne</Label>
+              <select 
+                value={meatPreference} 
+                onChange={(e) => setMeatPreference(e.target.value)}
+                className="flex h-11 w-full rounded-md border border-input bg-transparent px-3 py-1 text-base shadow-sm transition-colors focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring"
+              >
+                <option value="Mixto">Mixto (Res y Pollo)</option>
+                <option value="Solo Res">Solo Carne de Res</option>
+                <option value="Solo Pollo">Solo Pollo</option>
+              </select>
+            </div>
+
+            <Button onClick={generateBasket} disabled={isGenerating} className="w-full bg-gradient-to-r from-purple-600 to-pink-600 text-white h-11 mt-2">
               {isGenerating ? <><Sparkles className="w-5 h-5 mr-2 animate-spin" />Generando...</> : <><Sparkles className="w-5 h-5 mr-2" />Generar Canasta IA</>}
             </Button>
           </div>
@@ -125,8 +191,8 @@ export function AIBasket({ markets }: AIBasketProps) {
           {generatedBasket && (
             <div className="mt-4 space-y-2">
               <div className="bg-gradient-to-br from-green-50 to-emerald-50 rounded-lg p-3 border-2 border-green-200">
-                <p className="text-xs text-green-700 font-medium">Ahorro Total</p>
-                <p className="text-xl font-bold text-green-800">Bs. {generatedBasket.savings.toFixed(2)}</p>
+                <p className="text-xs text-green-700 font-medium">Ahorro Estimado</p>
+                <p className="text-xl font-bold text-green-800">Bs. {generatedBasket.savings > 0 ? generatedBasket.savings.toFixed(2) : "0.00"}</p>
               </div>
               <div className="bg-gradient-to-br from-blue-50 to-cyan-50 rounded-lg p-3 border-2 border-blue-200">
                 <p className="text-xs text-blue-700 font-medium">Costo Total</p>
@@ -156,23 +222,29 @@ export function AIBasket({ markets }: AIBasketProps) {
 
         {generatedBasket && !isGenerating && (
           <div className="space-y-4">
-            <div className="bg-gradient-to-r from-purple-600 to-pink-600 rounded-xl p-4 text-white shadow-lg">
-              <div className="flex items-center gap-2 mb-3">
-                <CheckCircle className="w-6 h-6" />
-                <div>
-                  <h3 className="text-lg font-bold">¡Canasta Generada!</h3>
-                  <p className="text-xs text-white/90">Para {generatedBasket.membersServed} {generatedBasket.membersServed === 1 ? "persona" : "personas"} - Bs. {generatedBasket.weeklyBudget.toFixed(0)}</p>
+            
+            {/* HU-43: Alerta dinámica si el presupuesto no alcanza para 7 días */}
+            {generatedBasket.daysCovered < 7 ? (
+               <div className="bg-gradient-to-r from-amber-500 to-orange-500 rounded-xl p-4 text-white shadow-lg">
+                 <div className="flex items-center gap-2 mb-3">
+                   <AlertTriangle className="w-6 h-6" />
+                   <div>
+                     <h3 className="text-lg font-bold">Presupuesto Ajustado</h3>
+                     <p className="text-sm text-white/90">Tu dinero alcanza para {generatedBasket.daysCovered} días exactos.</p>
+                   </div>
+                 </div>
+               </div>
+            ) : (
+              <div className="bg-gradient-to-r from-purple-600 to-pink-600 rounded-xl p-4 text-white shadow-lg">
+                <div className="flex items-center gap-2 mb-3">
+                  <CheckCircle className="w-6 h-6" />
+                  <div>
+                    <h3 className="text-lg font-bold">¡Canasta Completa!</h3>
+                    <p className="text-xs text-white/90">Semana cubierta para {generatedBasket.membersServed} personas</p>
+                  </div>
                 </div>
               </div>
-              <div className="grid grid-cols-3 gap-2">
-                {[["Items", generatedBasket.items.length], ["Gastado", `Bs. ${generatedBasket.totalCost.toFixed(0)}`], ["Ahorro", `Bs. ${generatedBasket.savings.toFixed(0)}`]].map(([label, val]) => (
-                  <div key={label as string} className="bg-white/20 rounded-lg p-2 backdrop-blur-sm">
-                    <p className="text-xs text-white/80 mb-0.5">{label}</p>
-                    <p className="text-lg font-bold">{val}</p>
-                  </div>
-                ))}
-              </div>
-            </div>
+            )}
 
             {Object.entries(groupByCategory(generatedBasket.items)).map(([category, items]) => (
               <div key={category} className="bg-white rounded-xl shadow-lg overflow-hidden">
@@ -190,7 +262,7 @@ export function AIBasket({ markets }: AIBasketProps) {
                           <h5 className="font-bold text-base mb-1 truncate">{item.productName}</h5>
                           <span className="px-2 py-0.5 rounded-full text-xs font-bold text-white" style={{ backgroundColor: item.marketColor }}>{item.marketName}</span>
                           <div className="flex flex-col gap-0.5 text-xs text-gray-600 mt-1.5">
-                            <span>Cantidad: <strong>{item.quantity} kg</strong></span>
+                            <span>Cantidad: <strong>{item.quantity} kg o unids.</strong></span>
                             <span>Precio: <strong>Bs. {item.unitPrice.toFixed(2)}</strong></span>
                           </div>
                         </div>
@@ -206,15 +278,27 @@ export function AIBasket({ markets }: AIBasketProps) {
             ))}
 
             <div className="bg-gradient-to-br from-green-500 to-emerald-600 rounded-xl p-4 text-white shadow-lg">
-              <div className="flex items-center justify-between gap-3">
-                <div className="flex items-center gap-2 flex-1">
-                  <TrendingDown className="w-6 h-6 shrink-0" />
+              <div className="flex items-center justify-between gap-2 mb-3">
+                <div className="flex items-center gap-2">
+                  <TrendingDown className="w-5 h-5 shrink-0" />
                   <div>
                     <p className="text-white/90 text-xs">Optimización</p>
-                    <p className="text-lg font-bold">{((generatedBasket.savings / generatedBasket.weeklyBudget) * 100).toFixed(1)}% Ahorro</p>
+                    <p className="text-lg font-bold">
+                      {generatedBasket.savings > 0 
+                        ? ((generatedBasket.savings / generatedBasket.weeklyBudget) * 100).toFixed(1) 
+                        : "0.0"}% Ahorro
+                    </p>
                   </div>
                 </div>
-                <Button className="bg-white text-green-700 hover:bg-green-50 shrink-0 h-9 text-sm">
+              </div>
+              
+              {/* HU-42: Botones de acción, incluyendo "Guardar" */}
+              <div className="flex gap-2">
+                <Button onClick={handleSaveBasket} disabled={isSaving} className="flex-1 bg-white/20 hover:bg-white/30 text-white h-10 text-sm border border-white/30">
+                  {isSaving ? <Sparkles className="w-4 h-4 mr-1 animate-spin" /> : <Save className="w-4 h-4 mr-1" />}
+                  {isSaving ? "Guardando..." : "Guardar"}
+                </Button>
+                <Button className="flex-1 bg-white text-green-700 hover:bg-green-50 h-10 text-sm">
                   <ShoppingCart className="w-4 h-4 mr-1" />Descargar
                 </Button>
               </div>
