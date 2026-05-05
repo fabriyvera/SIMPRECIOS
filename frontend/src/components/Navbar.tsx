@@ -36,7 +36,7 @@ export function Navbar({ currentView, onViewChange, currentUser, isVendorMode, o
               <p className="text-xs text-white/80">Bolivia</p>
             </div>
           </div>
-          {/* --- INICIO DE TU MÓDULO DE GESTIÓN DE USUARIOS --- */}
+          {/* --- INICIO DEL MÓDULO DE GESTIÓN DE USUARIOS --- */}
           {isLoggedIn ? (
             <div className="relative group">
               <button className="flex items-center gap-2 bg-white/20 hover:bg-white/30 transition-colors rounded-full pl-2 pr-1 py-1 backdrop-blur-sm cursor-pointer">
@@ -77,7 +77,7 @@ export function Navbar({ currentView, onViewChange, currentUser, isVendorMode, o
               </Link>
             </div>
           )}
-          {/* --- FIN DE TU MÓDULO DE GESTIÓN DE USUARIOS --- */}
+          {/* --- FIN DE MÓDULO DE GESTIÓN DE USUARIOS --- */}
         </div>
       </div>
 
