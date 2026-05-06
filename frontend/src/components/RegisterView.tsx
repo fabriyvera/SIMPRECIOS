@@ -4,12 +4,11 @@ import React, { useState } from 'react';
 import { ArrowLeft, User, Store } from 'lucide-react';
 import { AppView } from '@/types';
 
-// Le enseñamos a TypeScript que este componente recibe la función
 interface RegisterViewProps {
   onViewChange: (view: AppView) => void;
 }
 
-export default function RegisterView({ onViewChange }: RegisterViewProps) {
+export function RegisterView({ onViewChange }: RegisterViewProps) {
   const [role, setRole] = useState<'comprador' | 'vendedora'>('comprador');
   const [name, setName] = useState('');
   const [email, setEmail] = useState('');
@@ -23,7 +22,6 @@ export default function RegisterView({ onViewChange }: RegisterViewProps) {
   return (
     <div className="min-h-screen flex items-center justify-center bg-gray-50 p-4 relative py-12">
       
-      {/* Botón de Regreso */}
       <button 
         onClick={() => onViewChange("home")} 
         className="absolute top-6 left-6 flex items-center gap-2 text-gray-500 hover:text-orange-600 transition-colors font-medium bg-white px-4 py-2 rounded-full shadow-sm border border-gray-100 cursor-pointer"
@@ -73,7 +71,6 @@ export default function RegisterView({ onViewChange }: RegisterViewProps) {
 
         <div className="mt-6 text-center text-sm text-gray-600">
           ¿Ya tienes cuenta?{' '}
-          {/* Botón hacia el login corregido */}
           <button 
             onClick={() => onViewChange("login")} 
             className="text-transparent bg-clip-text bg-gradient-to-r from-orange-500 to-pink-500 font-extrabold hover:opacity-80 cursor-pointer"

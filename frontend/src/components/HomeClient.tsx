@@ -12,11 +12,9 @@ import { Avatar } from "@/components/ui/avatar";
 import { Button } from "@/components/ui/button";
 import { INITIAL_MARKETS, REFERENCE_PRICES, generatePriceHistory } from "@/lib/data";
 import { Market, AppView, PriceHistory } from "@/types";
-
-// Importamos tus nuevas vistas
-import LoginView from "@/components/LoginView";
-import RegisterView from "@/components/RegisterView";
-import RecoverView from "@/components/RecoverView";
+import { LoginView } from "@/components/LoginView";
+import { RegisterView } from "@/components/RegisterView";
+import { RecoverView } from "@/components/RecoverView";
 
 export default function HomeClient() {
   const [currentUser] = useState({

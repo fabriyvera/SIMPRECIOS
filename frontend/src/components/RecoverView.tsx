@@ -8,7 +8,7 @@ interface RecoverViewProps {
   onViewChange: (view: AppView) => void;
 }
 
-export default function RecoverView({ onViewChange }: RecoverViewProps) {
+export function RecoverView({ onViewChange }: RecoverViewProps) {
   return (
     <div className="min-h-screen flex items-center justify-center bg-gray-50 p-4 relative">
       <button 

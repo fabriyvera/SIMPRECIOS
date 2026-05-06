@@ -8,7 +8,7 @@ interface LoginViewProps {
   onViewChange: (view: AppView) => void;
 }
 
-export default function LoginView({ onViewChange }: LoginViewProps) {
+export function LoginView({ onViewChange }: LoginViewProps) {
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
 
@@ -20,7 +20,6 @@ export default function LoginView({ onViewChange }: LoginViewProps) {
   return (
     <div className="min-h-screen flex items-center justify-center bg-gray-50 p-4 relative">
       
-      {/* Botón de Regreso Actualizado */}
       <button 
         onClick={() => onViewChange("home")} 
         className="absolute top-6 left-6 flex items-center gap-2 text-gray-500 hover:text-orange-600 transition-colors font-medium bg-white px-4 py-2 rounded-full shadow-sm border border-gray-100 cursor-pointer"
