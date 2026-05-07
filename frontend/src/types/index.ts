@@ -34,7 +34,7 @@ export interface PriceHistory {
   price: number;
 }
 
-export type AppView = "home" | "map" | "ai" | "vendor";
+export type AppView = "home" | "map" | "ai" | "vendor" | "login" | "registro" | "recuperar" | "perfil";
 
 export interface CurrentUser {
   name: string;

@@ -3,8 +3,7 @@
 import { useState, useMemo } from "react";
 import { SearchAndFilter } from "@/components/SearchAndFilter";
 import { MarketGrid } from "@/components/MarketGrid";
-// Importación vital para que no salga "not defined"
-import { VendorDashboard } from "@/components/VendorDashboard"; 
+import { VendorDashboard } from "@/components/VendorDashboard";
 import { Navbar } from "@/components/Navbar";
 import { MapView } from "@/components/MapView";
 import { AIBasket } from "@/components/AIBasket";
@@ -13,6 +12,9 @@ import { Avatar } from "@/components/ui/avatar";
 import { Button } from "@/components/ui/button";
 import { INITIAL_MARKETS, REFERENCE_PRICES, generatePriceHistory } from "@/lib/data";
 import { Market, AppView, PriceHistory } from "@/types";
+import { LoginView } from "@/components/LoginView";
+import { RegisterView } from "@/components/RegisterView";
+import { RecoverView } from "@/components/RecoverView";
 
 export default function HomeClient() {
   const [currentUser] = useState({
@@ -31,8 +33,29 @@ export default function HomeClient() {
   const [showOpenOnly, setShowOpenOnly] = useState(false);
   const [selectedMarketLocation, setSelectedMarketLocation] = useState("all");
 
-  // --- Lógica de Negocio / Handlers ---
+  // Handlers de navegación y modo vendedor
+  const handleToggleVendorMode = () => {
+    if (isVendorMode) {
+      setIsVendorMode(false);
+      setCurrentView("home");
+      setSelectedVendorMarket(null);
+    } else {
+      setIsVendorMode(true);
+      setCurrentView("vendor");
+    }
+  };
 
+  const handleViewChange = (view: AppView) => {
+    if (view === "vendor") {
+      setIsVendorMode(true);
+      setSelectedVendorMarket(null);
+    } else {
+      setIsVendorMode(false);
+    }
+    setCurrentView(view);
+  };
+
+  // Handlers de productos (del primer código)
   const handleUpdatePrice = (marketId: string, productId: string, newPrice: number) => {
     setMarkets((prev) =>
       prev.map((market) =>
@@ -63,7 +86,6 @@ export default function HomeClient() {
     );
   };
 
-  // NUEVO: Manejador para registrar productos desde el Dashboard
   const handleRegisterProduct = (marketId: string, productName: string, price: number) => {
     setMarkets((prev) =>
       prev.map((m) => {
@@ -79,7 +101,6 @@ export default function HomeClient() {
     );
   };
 
-  // NUEVO: Manejador para cambiar disponibilidad de stock
   const handleToggleStock = (marketId: string, productId: string) => {
     setMarkets((prev) =>
       prev.map((m) =>
@@ -95,8 +116,36 @@ export default function HomeClient() {
     );
   };
 
-  // --- Memos para Datos ---
+  const handleNotifyStock = (marketId: string, productId: string) => {
+    console.log(`Notificar reposición de producto ${productId} en mercado ${marketId}`);
+    // Aquí iría la lógica real de notificación
+  };
 
+  // Handlers de reseñas (del segundo código)
+  const handleAddReview = (marketId: string, rating: number, comment: string) => {
+    setMarkets((prev) =>
+      prev.map((market) => {
+        if (market.id !== marketId) return market;
+        const newReview = {
+          id: `r${Date.now()}`,
+          userName: currentUser.name,
+          rating,
+          comment,
+          date: new Date().toLocaleDateString("es-ES", {
+            day: "numeric",
+            month: "short",
+            year: "numeric",
+          }),
+        };
+        const updatedReviews = [...market.reviews, newReview];
+        const newRating =
+          updatedReviews.reduce((acc, r) => acc + r.rating, 0) / updatedReviews.length;
+        return { ...market, reviews: updatedReviews, rating: Number(newRating.toFixed(1)) };
+      })
+    );
+  };
+
+  // Datos memorizados (prices, history, filtros)
   const averagePrices = useMemo(() => {
     const priceMap: Record<string, number[]> = {};
     markets.forEach((market) => {
@@ -124,33 +173,54 @@ export default function HomeClient() {
     return history;
   }, [markets]);
 
-  // --- Filtros ---
+  const categories = useMemo(
+    () => [...new Set(markets.map((m) => m.category))].sort(),
+    [markets]
+  );
 
-  const categories = useMemo(() => [...new Set(markets.map((m) => m.category))].sort(), [markets]);
-  const marketLocations = useMemo(() => [...new Set(markets.map((m) => m.marketLocation))].sort(), [markets]);
+  const marketLocations = useMemo(
+    () => [...new Set(markets.map((m) => m.marketLocation))].sort(),
+    [markets]
+  );
 
   const filteredAndSortedMarkets = useMemo(() => {
     let filtered = markets.filter((market) => {
-      const matchesSearch = market.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
-                            market.description.toLowerCase().includes(searchTerm.toLowerCase());
-      const matchesCategory = selectedCategory === "all" || market.category === selectedCategory;
+      const matchesSearch =
+        market.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
+        market.description.toLowerCase().includes(searchTerm.toLowerCase());
+      const matchesCategory =
+        selectedCategory === "all" || market.category === selectedCategory;
       const matchesOpenStatus = !showOpenOnly || market.isOpen;
-      const matchesLocation = selectedMarketLocation === "all" || market.marketLocation === selectedMarketLocation;
+      const matchesLocation =
+        selectedMarketLocation === "all" || market.marketLocation === selectedMarketLocation;
       return matchesSearch && matchesCategory && matchesOpenStatus && matchesLocation;
     });
 
     filtered.sort((a, b) => {
-      if (sortBy === "name") return a.name.localeCompare(b.name);
-      if (sortBy === "rating-desc") return b.rating - a.rating;
-      return 0;
+      switch (sortBy) {
+        case "name": return a.name.localeCompare(b.name);
+        case "name-desc": return b.name.localeCompare(a.name);
+        case "rating": return a.rating - b.rating;
+        case "rating-desc": return b.rating - a.rating;
+        default: return 0;
+      }
     });
 
     return filtered;
   }, [markets, searchTerm, selectedCategory, sortBy, showOpenOnly, selectedMarketLocation]);
 
-  // --- Vistas Condicionales ---
+  // Vistas de autenticación
+  if (currentView === "login") {
+    return <LoginView onViewChange={handleViewChange} />;
+  }
+  if (currentView === "registro") {
+    return <RegisterView onViewChange={handleViewChange} />;
+  }
+  if (currentView === "recuperar") {
+    return <RecoverView onViewChange={handleViewChange} />;
+  }
 
-  // 1. Vista: Panel de Vendedor Detallado
+  // Vista de panel individual de un puesto (con todas las funciones de vendedor)
   if (isVendorMode && selectedVendorMarket) {
     const market = markets.find((m) => m.id === selectedVendorMarket);
     if (market) {
@@ -163,18 +233,21 @@ export default function HomeClient() {
                 className="text-white hover:bg-white/20 mb-4"
                 onClick={() => setSelectedVendorMarket(null)}
               >
-                <ArrowLeft className="w-4 h-4 mr-2" /> Volver a Mis Puestos
+                <ArrowLeft className="w-4 h-4 mr-2" />
+                Volver a Mis Puestos
               </Button>
             </div>
           </div>
           <div className="container mx-auto px-4 py-8">
             <VendorDashboard
               market={market}
-              onUpdatePrice={(prodId, price) => handleUpdatePrice(market.id, prodId, price)}
-              onMarkRestocked={(prodId) => handleMarkRestocked(market.id, prodId)}
+              onUpdatePrice={(productId, newPrice) =>
+                handleUpdatePrice(market.id, productId, newPrice)
+              }
+              onMarkRestocked={(productId) => handleMarkRestocked(market.id, productId)}
               onRegisterProduct={(name, price) => handleRegisterProduct(market.id, name, price)}
-              onToggleStock={(prodId) => handleToggleStock(market.id, prodId)}
-              onNotifyStock={(prodId) => console.log("Notificar stock:", prodId)}
+              onToggleStock={(productId) => handleToggleStock(market.id, productId)}
+              onNotifyStock={(productId) => handleNotifyStock(market.id, productId)}
               priceHistory={priceHistory}
               averagePrices={averagePrices}
               referencePrices={REFERENCE_PRICES}
@@ -185,71 +258,129 @@ export default function HomeClient() {
     }
   }
 
-  // 2. Vista: Lista de Puestos del Vendedor
+  // Vista de lista de puestos del vendedor (UI mejorada del segundo código)
   if (isVendorMode) {
     return (
       <div className="min-h-screen bg-background">
         <div className="bg-gradient-to-r from-purple-600 to-blue-600 text-white py-8 px-4 shadow-lg">
-          <div className="container mx-auto flex justify-between items-center">
-            <div className="flex items-center gap-3">
-              <Store className="w-8 h-8" />
-              <h1 className="text-white text-2xl font-bold">Panel de Vendedor</h1>
-            </div>
-            <Button onClick={() => setIsVendorMode(false)} className="bg-white/20 hover:bg-white/30 text-white">
-              Modo Comprador
-            </Button>
-          </div>
-        </div>
-        <div className="container mx-auto px-4 py-8 grid grid-cols-1 md:grid-cols-3 gap-6">
-          {markets.slice(0, 3).map((m) => (
-            <div key={m.id} onClick={() => setSelectedVendorMarket(m.id)} className="cursor-pointer border rounded-xl overflow-hidden hover:shadow-lg transition-shadow bg-white">
-              <img src={m.image} alt={m.name} className="h-40 w-full object-cover" />
-              <div className="p-4">
-                <h3 className="font-bold">{m.name}</h3>
-                <p className="text-sm text-gray-500">{m.category}</p>
-                <p className="mt-2 text-blue-600 font-bold">Ver Panel →</p>
+          <div className="container mx-auto">
+            <div className="flex items-center justify-between">
+              <div className="flex items-center gap-3">
+                <div className="bg-white/20 p-3 rounded-2xl backdrop-blur-sm">
+                  <Store className="w-8 h-8" />
+                </div>
+                <div>
+                  <h1 className="mb-0 text-white drop-shadow-lg">🏪 Panel de Vendedor</h1>
+                  <p className="text-white/90 text-lg">Gestiona tus puestos y precios</p>
+                </div>
+              </div>
+              <div className="flex items-center gap-3">
+                <Button
+                  onClick={handleToggleVendorMode}
+                  className="bg-white/20 hover:bg-white/30 text-white"
+                >
+                  <ShoppingBag className="w-4 h-4 mr-2" />
+                  Modo Comprador
+                </Button>
+                <div className="flex items-center gap-3 bg-white/20 rounded-full pl-4 pr-2 py-2 backdrop-blur-sm">
+                  <span className="text-sm font-bold text-white">{currentUser.name}</span>
+                  <Avatar className="w-11 h-11 border-2 border-white shadow-lg">
+                    <div className="w-full h-full bg-gradient-to-br from-yellow-400 to-orange-500 flex items-center justify-center">
+                      <span className="font-bold text-white">{currentUser.avatar}</span>
+                    </div>
+                  </Avatar>
+                </div>
               </div>
             </div>
-          ))}
+          </div>
+        </div>
+
+        <div className="container mx-auto px-4 py-8">
+          <div className="mb-6">
+            <h2 className="text-2xl font-bold mb-2">Mis Puestos</h2>
+            <p className="text-gray-600">Selecciona un puesto para gestionar precios y stock</p>
+          </div>
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+            {markets.slice(0, 3).map((market) => (
+              <div
+                key={market.id}
+                className="bg-white rounded-xl shadow-lg overflow-hidden cursor-pointer hover:shadow-xl transition-shadow border-l-4"
+                style={{ borderLeftColor: market.color }}
+                onClick={() => setSelectedVendorMarket(market.id)}
+              >
+                <div className="h-48 overflow-hidden">
+                  <img src={market.image} alt={market.name} className="w-full h-full object-cover" />
+                </div>
+                <div className="p-6">
+                  <div className="flex items-center justify-between mb-2">
+                    <h3 className="font-bold text-xl">{market.name}</h3>
+                    <span
+                      className="px-3 py-1 rounded-full text-sm font-bold text-white"
+                      style={{ backgroundColor: market.color }}
+                    >
+                      {market.category}
+                    </span>
+                  </div>
+                  <p className="text-sm text-gray-600 mb-4">{market.description}</p>
+                  <div className="flex items-center justify-between text-sm">
+                    <span className="text-gray-500">{market.products.length} productos</span>
+                    <span className="font-bold" style={{ color: market.color }}>
+                      Ver Panel →
+                    </span>
+                  </div>
+                </div>
+              </div>
+            ))}
+          </div>
         </div>
       </div>
     );
   }
 
-  // 3. Vista: Comprador (Home)
+  // Vista principal del comprador (home, mapa, AI basket)
   return (
     <div className="min-h-screen bg-background pb-20">
       <Navbar
         currentView={currentView}
-        onViewChange={(v) => setCurrentView(v)}
+        onViewChange={handleViewChange}
         currentUser={currentUser}
         isVendorMode={isVendorMode}
-        onToggleVendorMode={() => setIsVendorMode(!isVendorMode)}
+        onToggleVendorMode={handleToggleVendorMode}
       />
 
-      <div className="container mx-auto px-4 py-4">
-        {currentView === "home" && (
-          <>
-            <SearchAndFilter
-              searchTerm={searchTerm}
-              onSearchChange={setSearchTerm}
-              selectedCategory={selectedCategory}
-              onCategoryChange={setSelectedCategory}
-              sortBy={sortBy}
-              onSortChange={setSortBy}
-              categories={categories}
-              showOpenOnly={showOpenOnly}
-              onShowOpenOnlyChange={setShowOpenOnly}
-              selectedMarketLocation={selectedMarketLocation}
-              onMarketLocationChange={setSelectedMarketLocation}
-              marketLocations={marketLocations}
-            />
-            <MarketGrid markets={filteredAndSortedMarkets} onAddReview={() => {}} />
-          </>
-        )}
-        {currentView === "map" && <MapView markets={markets} />}
-        {currentView === "ai" && <AIBasket markets={markets} />}
-      </div>
+      {currentView === "map" && <MapView markets={markets} />}
+
+      {currentView === "ai" && <AIBasket markets={markets} />}
+
+      {currentView === "home" && (
+        <div className="px-4 py-4">
+          <SearchAndFilter
+            searchTerm={searchTerm}
+            onSearchChange={setSearchTerm}
+            selectedCategory={selectedCategory}
+            onCategoryChange={setSelectedCategory}
+            sortBy={sortBy}
+            onSortChange={setSortBy}
+            categories={categories}
+            showOpenOnly={showOpenOnly}
+            onShowOpenOnlyChange={setShowOpenOnly}
+            selectedMarketLocation={selectedMarketLocation}
+            onMarketLocationChange={setSelectedMarketLocation}
+            marketLocations={marketLocations}
+          />
+
+          <div className="mb-4 bg-white rounded-xl p-3 shadow-sm border-l-4 border-orange-500">
+            <p className="text-sm font-bold text-gray-700">
+              📊 {filteredAndSortedMarkets.length} de {markets.length} puestos
+              {selectedMarketLocation !== "all" && (
+                <span className="ml-2 text-orange-600">en {selectedMarketLocation}</span>
+              )}
+            </p>
+          </div>
+
+          <MarketGrid markets={filteredAndSortedMarkets} onAddReview={handleAddReview} />
+        </div>
+      )}
     </div>
   );
 }

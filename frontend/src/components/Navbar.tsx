@@ -1,5 +1,7 @@
 "use client";
 
+import { useState } from "react";
+import Link from "next/link";
 import { Home, MapPin, Sparkles, Store } from "lucide-react";
 import { Avatar } from "@/components/ui/avatar";
 import { AppView } from "@/types";
@@ -13,6 +15,7 @@ interface NavbarProps {
 }
 
 export function Navbar({ currentView, onViewChange, currentUser, isVendorMode, onToggleVendorMode }: NavbarProps) {
+  const [isLoggedIn, setIsLoggedIn] = useState(false);
   const navItems = [
     { id: "home" as const, icon: Home, label: "Inicio" },
     { id: "map" as const, icon: MapPin, label: "Buscar" },
@@ -33,14 +36,48 @@ export function Navbar({ currentView, onViewChange, currentUser, isVendorMode, o
               <p className="text-xs text-white/80">Bolivia</p>
             </div>
           </div>
-          <div className="flex items-center gap-2 bg-white/20 rounded-full pl-2 pr-1 py-1 backdrop-blur-sm">
-            <span className="text-xs font-bold text-white hidden sm:block">{currentUser.name}</span>
-            <Avatar className="w-8 h-8 border-2 border-white shadow-lg">
-              <div className="w-full h-full bg-gradient-to-br from-yellow-400 to-orange-500 flex items-center justify-center">
-                <span className="text-xs font-bold text-white">{currentUser.avatar}</span>
+          {/* --- INICIO DEL MÓDULO DE GESTIÓN DE USUARIOS --- */}
+          {isLoggedIn ? (
+            <div className="relative group">
+              <button className="flex items-center gap-2 bg-white/20 hover:bg-white/30 transition-colors rounded-full pl-2 pr-1 py-1 backdrop-blur-sm cursor-pointer">
+                <span className="text-xs font-bold text-white hidden sm:block">{currentUser.name}</span>
+                <Avatar className="w-8 h-8 border-2 border-white shadow-lg">
+                  <div className="w-full h-full bg-gradient-to-br from-yellow-400 to-orange-500 flex items-center justify-center">
+                    <span className="text-xs font-bold text-white">{currentUser.avatar}</span>
+                  </div>
+                </Avatar>
+              </button>
+
+              {/* Menú Desplegable (Dropdown) */}
+              <div className="absolute right-0 mt-2 w-40 bg-white rounded-md shadow-xl py-1 z-50 hidden group-hover:block border border-gray-100">
+                <button onClick={() => onViewChange("perfil" as AppView)} className="block w-full text-left px-4 py-2 text-sm font-medium text-gray-700 hover:bg-orange-50 hover:text-orange-600 transition-colors">
+                  Mi Perfil
+                </button>
+                <button
+                  onClick={() => setIsLoggedIn(false)}
+                  className="block w-full text-left px-4 py-2 text-sm font-medium text-red-600 hover:bg-red-50 transition-colors"
+                >
+                  Cerrar Sesión
+                </button>
               </div>
-            </Avatar>
-          </div>
+            </div>
+          ) : (
+            <div className="flex items-center gap-3">
+              <button
+                onClick={() => onViewChange("login" as AppView)}
+                className="text-xs font-bold text-white hover:text-white/80 transition-colors drop-shadow-md cursor-pointer"
+              >
+                Ingresar
+              </button>
+              <button
+                onClick={() => onViewChange("registro" as AppView)}
+                className="bg-white text-orange-600 text-xs font-bold px-4 py-2 rounded-full shadow-lg hover:bg-gray-100 transition-colors cursor-pointer"
+              >
+                Registrarse
+              </button>
+            </div>
+          )}
+          {/* --- FIN DE MÓDULO DE GESTIÓN DE USUARIOS --- */}
         </div>
       </div>
 
