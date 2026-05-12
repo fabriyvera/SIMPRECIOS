@@ -1,7 +1,10 @@
 "use client";
 
 import { useState, useEffect, ReactNode } from "react";
+import dynamic from "next/dynamic";
 import { MapPin, Navigation, Store as StoreIcon, Phone, Clock } from "lucide-react";
+
+const RealMap = dynamic(() => import("./RealMap"), { ssr: false, loading: () => <div className="h-full w-full flex items-center justify-center bg-gray-100 text-gray-500">Cargando mapa...</div> });
 import { Button } from "@/components/ui/button";
 import { Market } from "@/types";
 
@@ -90,47 +93,15 @@ export function MapView({ markets, filterComponent }: MapViewProps) {
           <div className="bg-gradient-to-br from-blue-500 to-blue-600 p-3 text-white">
             <h3 className="text-sm font-bold flex items-center gap-2"><MapPin className="w-4 h-4" />Mapa de Mercados</h3>
           </div>
-          <div className="relative bg-gray-100 h-64 flex items-center justify-center">
-            <div className="absolute inset-0 bg-gradient-to-br from-green-100 via-blue-100 to-yellow-100">
-              <div className="absolute top-1/2 left-0 right-0 h-1 bg-gray-300" />
-              <div className="absolute top-0 bottom-0 left-1/2 w-1 bg-gray-300" />
-              <div className="absolute top-1/4 left-0 right-0 h-0.5 bg-gray-200" />
-              <div className="absolute top-3/4 left-0 right-0 h-0.5 bg-gray-200" />
-              <div className="absolute top-0 bottom-0 left-1/4 w-0.5 bg-gray-200" />
-              <div className="absolute top-0 bottom-0 left-3/4 w-0.5 bg-gray-200" />
-
-              {userLocation && (
-                <div className="absolute top-1/2 left-1/2 transform -translate-x-1/2 -translate-y-1/2 z-10">
-                  <div className="relative">
-                    <div className="absolute inset-0 bg-blue-500 rounded-full animate-ping opacity-75 w-6 h-6" />
-                    <div className="relative bg-blue-600 rounded-full p-1.5 shadow-lg border-2 border-white">
-                      <Navigation className="w-3 h-3 text-white" />
-                    </div>
-                  </div>
-                  <div className="mt-0.5 text-xs font-bold text-blue-900 text-center whitespace-nowrap">Tu ubicación</div>
-                </div>
-              )}
-
-              {MARKET_LOCATIONS.map((market, index) => {
-                const count = getStallsCount(market.marketLocation);
-                const isGray = count === 0;
-                return (
-                  <div
-                    key={market.id}
-                    className={`absolute transform -translate-x-1/2 -translate-y-1/2 cursor-pointer group ${isGray ? 'opacity-50 grayscale' : ''}`}
-                    style={{ top: markerPositions[index].top, left: markerPositions[index].left }}
-                    onClick={() => setSelectedMarket(market)}
-                  >
-                    <div className="p-1.5 rounded-full shadow-lg border-2 border-white group-hover:scale-110 transition-transform" style={{ backgroundColor: market.color }}>
-                      <StoreIcon className="w-4 h-4 text-white" />
-                    </div>
-                    <div className="absolute top-full mt-1 left-1/2 transform -translate-x-1/2 bg-white/90 px-1.5 py-0.5 rounded text-[10px] font-bold shadow-sm whitespace-nowrap text-gray-700">
-                      {count} {count === 1 ? 'puesto' : 'puestos'}
-                    </div>
-                  </div>
-                );
-              })}
-            </div>
+          <div className="relative bg-gray-100 h-64 z-0">
+            <RealMap 
+              locations={MARKET_LOCATIONS.map(m => ({ ...m, count: getStallsCount(m.marketLocation) }))}
+              userLocation={userLocation}
+              onSelectMarket={(id) => {
+                const market = MARKET_LOCATIONS.find(m => m.id === id);
+                if (market) setSelectedMarket(market);
+              }}
+            />
           </div>
         </div>
 
