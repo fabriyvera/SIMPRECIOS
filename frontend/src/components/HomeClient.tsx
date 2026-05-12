@@ -26,6 +26,19 @@ export default function HomeClient() {
   const [selectedCategory, setSelectedCategory] = useState("all");
   const [selectedMarketLocation, setSelectedMarketLocation] = useState("all");
 
+  // --- Memos para filtros ---
+  const categories = useMemo(() => [...new Set(markets.map(m => m.category))].sort(), [markets]);
+  const marketLocations = useMemo(() => [...new Set(markets.map(m => m.marketLocation))].sort(), [markets]);
+
+  const filteredMarkets = useMemo(() => {
+    return markets.filter(m => {
+      const matchSearch = m.name.toLowerCase().includes(searchTerm.toLowerCase()) || m.description.toLowerCase().includes(searchTerm.toLowerCase());
+      const matchCat = selectedCategory === "all" || m.category === selectedCategory;
+      const matchLoc = selectedMarketLocation === "all" || m.marketLocation === selectedMarketLocation;
+      return matchSearch && matchCat && matchLoc;
+    });
+  }, [markets, searchTerm, selectedCategory, selectedMarketLocation]);
+
   // --- Handlers para el Dashboard ---
   const handleUpdatePrice = (mId: string, pId: string, price: number) => {
     setMarkets(prev => prev.map(m => m.id === mId ? {
@@ -168,6 +181,15 @@ export default function HomeClient() {
   }
 
   // VISTA 3: MODO COMPRADOR (HOME)
+  const searchAndFilterComponent = (
+    <SearchAndFilter 
+      searchTerm={searchTerm} onSearchChange={setSearchTerm}
+      selectedCategory={selectedCategory} onCategoryChange={setSelectedCategory}
+      selectedMarketLocation={selectedMarketLocation} onMarketLocationChange={setSelectedMarketLocation}
+      categories={categories} marketLocations={marketLocations} sortBy="name" onSortChange={() => {}} showOpenOnly={false} onShowOpenOnlyChange={() => {}}
+    />
+  );
+
   return (
     <div className="min-h-screen bg-background pb-20">
       <Navbar 
@@ -180,14 +202,9 @@ export default function HomeClient() {
       <div className="container mx-auto px-4 py-6">
         {currentView === "home" && (
           <>
-            <SearchAndFilter 
-              searchTerm={searchTerm} onSearchChange={setSearchTerm}
-              selectedCategory={selectedCategory} onCategoryChange={setSelectedCategory}
-              selectedMarketLocation={selectedMarketLocation} onMarketLocationChange={setSelectedMarketLocation}
-              categories={[]} marketLocations={[]} sortBy="name" onSortChange={() => {}} showOpenOnly={false} onShowOpenOnlyChange={() => {}}
-            />
+            {searchAndFilterComponent}
             <MarketGrid 
-              markets={markets.filter(m => m.name.toLowerCase().includes(searchTerm.toLowerCase()))} 
+              markets={filteredMarkets} 
               onAddReview={() => {}} 
               priceHistory={priceHistory}
               averagePrices={averagePrices}
@@ -195,7 +212,7 @@ export default function HomeClient() {
             />
           </>
         )}
-        {currentView === "map" && <MapView markets={markets} />}
+        {currentView === "map" && <MapView markets={filteredMarkets} filterComponent={searchAndFilterComponent} />}
         {currentView === "ai" && <AIBasket markets={markets} />}
       </div>
     </div>

@@ -1,12 +1,13 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useState, useEffect, ReactNode } from "react";
 import { MapPin, Navigation, Store as StoreIcon, Phone, Clock } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Market } from "@/types";
 
 interface MapViewProps {
   markets: Market[];
+  filterComponent?: ReactNode;
 }
 
 interface MarketLocation {
@@ -27,7 +28,7 @@ const MARKET_LOCATIONS: MarketLocation[] = [
   { id: "norte", name: "Mercado Norte", marketLocation: "Mercado Norte", color: "#4caf50", lat: -16.4900, lng: -68.1600, address: "Zona Norte, La Paz", phone: "+591 2-2345680", hours: "Lun-Sáb: 7:00 AM - 6:00 PM" },
 ];
 
-export function MapView({ markets }: MapViewProps) {
+export function MapView({ markets, filterComponent }: MapViewProps) {
   const [userLocation, setUserLocation] = useState<{ lat: number; lng: number } | null>(null);
   const [selectedMarket, setSelectedMarket] = useState<MarketLocation | null>(null);
   const [locationError, setLocationError] = useState<string | null>(null);
@@ -77,6 +78,12 @@ export function MapView({ markets }: MapViewProps) {
         )}
       </div>
 
+      {filterComponent && (
+        <div className="mb-4">
+          {filterComponent}
+        </div>
+      )}
+
       <div className="space-y-4">
         {/* Mapa simulado */}
         <div className="bg-white rounded-xl shadow-lg overflow-hidden">
@@ -104,18 +111,25 @@ export function MapView({ markets }: MapViewProps) {
                 </div>
               )}
 
-              {MARKET_LOCATIONS.map((market, index) => (
-                <div
-                  key={market.id}
-                  className="absolute transform -translate-x-1/2 -translate-y-1/2 cursor-pointer group"
-                  style={{ top: markerPositions[index].top, left: markerPositions[index].left }}
-                  onClick={() => setSelectedMarket(market)}
-                >
-                  <div className="p-1.5 rounded-full shadow-lg border-2 border-white group-hover:scale-110 transition-transform" style={{ backgroundColor: market.color }}>
-                    <StoreIcon className="w-4 h-4 text-white" />
+              {MARKET_LOCATIONS.map((market, index) => {
+                const count = getStallsCount(market.marketLocation);
+                const isGray = count === 0;
+                return (
+                  <div
+                    key={market.id}
+                    className={`absolute transform -translate-x-1/2 -translate-y-1/2 cursor-pointer group ${isGray ? 'opacity-50 grayscale' : ''}`}
+                    style={{ top: markerPositions[index].top, left: markerPositions[index].left }}
+                    onClick={() => setSelectedMarket(market)}
+                  >
+                    <div className="p-1.5 rounded-full shadow-lg border-2 border-white group-hover:scale-110 transition-transform" style={{ backgroundColor: market.color }}>
+                      <StoreIcon className="w-4 h-4 text-white" />
+                    </div>
+                    <div className="absolute top-full mt-1 left-1/2 transform -translate-x-1/2 bg-white/90 px-1.5 py-0.5 rounded text-[10px] font-bold shadow-sm whitespace-nowrap text-gray-700">
+                      {count} {count === 1 ? 'puesto' : 'puestos'}
+                    </div>
                   </div>
-                </div>
-              ))}
+                );
+              })}
             </div>
           </div>
         </div>
@@ -129,10 +143,12 @@ export function MapView({ markets }: MapViewProps) {
           {MARKET_LOCATIONS.map((market) => {
             const distance = userLocation ? calculateDistance(userLocation.lat, userLocation.lng, market.lat, market.lng) : "0";
             const isSelected = selectedMarket?.id === market.id;
+            const count = getStallsCount(market.marketLocation);
+            const isGray = count === 0;
             return (
               <div
                 key={market.id}
-                className={`bg-white rounded-xl shadow-lg overflow-hidden cursor-pointer transition-all ${isSelected ? "ring-2" : ""}`}
+                className={`bg-white rounded-xl shadow-lg overflow-hidden cursor-pointer transition-all ${isSelected ? "ring-2" : ""} ${isGray ? "opacity-60 grayscale" : ""}`}
                 style={{ borderLeft: `4px solid ${market.color}` }}
                 onClick={() => setSelectedMarket(isSelected ? null : market)}
               >
@@ -154,7 +170,7 @@ export function MapView({ markets }: MapViewProps) {
                   <div className="space-y-1.5 text-xs">
                     <div className="flex items-center gap-2 text-gray-600"><Clock className="w-3 h-3 shrink-0" /><span>{market.hours}</span></div>
                     <div className="flex items-center gap-2 text-gray-600"><Phone className="w-3 h-3 shrink-0" /><span>{market.phone}</span></div>
-                    <div className="flex items-center gap-2 text-gray-600"><StoreIcon className="w-3 h-3 shrink-0" /><span className="font-bold">{getStallsCount(market.marketLocation)} puestos</span></div>
+                    <div className="flex items-center gap-2 text-gray-600"><StoreIcon className="w-3 h-3 shrink-0" /><span className="font-bold">{count} puestos {count === 0 && "(ninguno coincide con tu búsqueda)"}</span></div>
                   </div>
                   {isSelected && (
                     <div className="mt-3 pt-3 border-t">
