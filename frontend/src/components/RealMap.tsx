@@ -21,6 +21,7 @@ interface RealMapProps {
     lng: number;
     address: string;
     count: number;
+    hasFavorites?: boolean;
   }[];
   userLocation: { lat: number; lng: number } | null;
   onSelectMarket: (id: string) => void;
@@ -65,6 +66,24 @@ export default function RealMap({ locations, userLocation, onSelectMarket }: Rea
               " class="hover:scale-110">
                 <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="white" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m2 7 4.41-4.41A2 2 0 0 1 7.83 2h8.34a2 2 0 0 1 1.42.59L22 7"/><path d="M4 12v8a2 2 0 0 0 2 2h2V14h8v8h2a2 2 0 0 0 2-2v-8"/><path d="M2 7h20v2a3 3 0 0 1-6 0 3 3 0 0 1-6 0 3 3 0 0 1-6 0h-2z"/></svg>
               </div>
+              ${loc.hasFavorites ? `
+              <div style="
+                position: absolute;
+                top: -6px;
+                right: -6px;
+                background-color: #facc15;
+                border-radius: 50%;
+                width: 16px;
+                height: 16px;
+                display: flex;
+                align-items: center;
+                justify-content: center;
+                border: 2px solid white;
+                box-shadow: 0 1px 2px rgba(0,0,0,0.2);
+              ">
+                <svg xmlns="http://www.w3.org/2000/svg" width="10" height="10" viewBox="0 0 24 24" fill="white" stroke="white" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2"/></svg>
+              </div>
+              ` : ''}
               <div style="
                 position: absolute;
                 top: 100%;

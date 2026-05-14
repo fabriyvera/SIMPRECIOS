@@ -27,6 +27,7 @@ export interface Market {
   marketLocation: string;
   color: string;
   vendorId?: string;
+  isFavorite?: boolean;
 }
 
 export interface PriceHistory {

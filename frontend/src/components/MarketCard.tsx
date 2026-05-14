@@ -1,7 +1,7 @@
 "use client";
 
 import { useState } from "react";
-import { Star, Clock, MessageSquare, ChevronDown, ChevronUp, MapPin, TrendingUp, BarChart3, CheckCircle } from "lucide-react";
+import { Star, Clock, MessageSquare, ChevronDown, ChevronUp, MapPin, TrendingUp, BarChart3, CheckCircle, Heart } from "lucide-react";
 import { Card, CardContent, CardFooter, CardHeader } from "./ui/card";
 import { Badge } from "./ui/badge";
 import { Button } from "./ui/button";
@@ -19,6 +19,7 @@ interface MarketCardProps {
   priceHistory: Record<string, PriceHistory[]>;
   averagePrices: Record<string, number>;
   referencePrices: Record<string, number>;
+  onToggleFavorite: (marketId: string) => void;
 }
 
 export function MarketCard({
@@ -27,7 +28,8 @@ export function MarketCard({
   allMarkets,
   priceHistory,
   averagePrices,
-  referencePrices
+  referencePrices,
+  onToggleFavorite
 }: MarketCardProps) {
   const [showProducts, setShowProducts] = useState(false);
   const [showReviews, setShowReviews] = useState(false);
@@ -51,10 +53,19 @@ export function MarketCard({
   const availableProducts = market.products.filter(p => p.available);
 
   return (
-    <Card className="overflow-hidden hover:shadow-xl transition-all duration-300 border-2 hover:scale-[1.02]" style={{ borderColor: market.color }}>
+    <Card 
+      className={`overflow-hidden hover:shadow-xl transition-all duration-300 border-2 hover:scale-[1.02] ${market.isFavorite ? 'ring-4 ring-yellow-400 shadow-yellow-200 shadow-lg' : ''}`} 
+      style={{ borderColor: market.isFavorite ? '#facc15' : market.color }}
+    >
       <div className="relative h-48 overflow-hidden">
         <img src={market.image} alt={market.name} className="w-full h-full object-cover" />
         <div className="absolute inset-0 bg-gradient-to-t from-black/60 via-black/20 to-transparent" />
+        <button
+          onClick={(e) => { e.stopPropagation(); onToggleFavorite(market.id); }}
+          className="absolute top-3 left-3 bg-white/90 hover:bg-white p-2 rounded-full shadow-lg transition-transform hover:scale-110"
+        >
+          <Heart className={`w-5 h-5 ${market.isFavorite ? 'fill-red-500 text-red-500' : 'text-gray-400'}`} />
+        </button>
         <Badge
           className="absolute top-3 right-3 text-white font-bold shadow-lg"
           style={{ backgroundColor: market.isOpen ? '#4caf50' : '#f44336' }}

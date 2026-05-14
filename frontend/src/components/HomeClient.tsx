@@ -25,6 +25,7 @@ export default function HomeClient() {
   const [searchTerm, setSearchTerm] = useState("");
   const [selectedCategory, setSelectedCategory] = useState("all");
   const [selectedMarketLocation, setSelectedMarketLocation] = useState("all");
+  const [showFavoritesOnly, setShowFavoritesOnly] = useState(false);
 
   // --- Memos para filtros ---
   const categories = useMemo(() => [...new Set(markets.map(m => m.category))].sort(), [markets]);
@@ -35,14 +36,21 @@ export default function HomeClient() {
       const matchSearch = m.name.toLowerCase().includes(searchTerm.toLowerCase()) || m.description.toLowerCase().includes(searchTerm.toLowerCase());
       const matchCat = selectedCategory === "all" || m.category === selectedCategory;
       const matchLoc = selectedMarketLocation === "all" || m.marketLocation === selectedMarketLocation;
-      return matchSearch && matchCat && matchLoc;
+      const matchFav = !showFavoritesOnly || m.isFavorite;
+      return matchSearch && matchCat && matchLoc && matchFav;
     });
-  }, [markets, searchTerm, selectedCategory, selectedMarketLocation]);
+  }, [markets, searchTerm, selectedCategory, selectedMarketLocation, showFavoritesOnly]);
 
   // --- Handlers para el Dashboard ---
   const handleUpdatePrice = (mId: string, pId: string, price: number) => {
     setMarkets(prev => prev.map(m => m.id === mId ? {
       ...m, products: m.products.map(p => p.id === pId ? { ...p, price } : p)
+    } : m));
+  };
+
+  const handleToggleFavorite = (mId: string) => {
+    setMarkets(prev => prev.map(m => m.id === mId ? {
+      ...m, isFavorite: !m.isFavorite
     } : m));
   };
 
@@ -187,6 +195,7 @@ export default function HomeClient() {
       selectedCategory={selectedCategory} onCategoryChange={setSelectedCategory}
       selectedMarketLocation={selectedMarketLocation} onMarketLocationChange={setSelectedMarketLocation}
       categories={categories} marketLocations={marketLocations} sortBy="name" onSortChange={() => {}} showOpenOnly={false} onShowOpenOnlyChange={() => {}}
+      showFavoritesOnly={showFavoritesOnly} onShowFavoritesOnlyChange={setShowFavoritesOnly}
     />
   );
 
@@ -209,6 +218,7 @@ export default function HomeClient() {
               priceHistory={priceHistory}
               averagePrices={averagePrices}
               referencePrices={REFERENCE_PRICES}
+              onToggleFavorite={handleToggleFavorite}
             />
           </>
         )}

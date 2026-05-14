@@ -66,6 +66,7 @@ export function MapView({ markets, filterComponent }: MapViewProps) {
   };
 
   const getStallsCount = (marketLocation: string) => markets.filter((m) => m.marketLocation === marketLocation).length;
+  const getFavoriteCount = (marketLocation: string) => markets.filter((m) => m.marketLocation === marketLocation && m.isFavorite).length;
 
   const markerPositions = [{ top: "30%", left: "60%" }, { top: "65%", left: "35%" }, { top: "40%", left: "75%" }];
 
@@ -95,7 +96,11 @@ export function MapView({ markets, filterComponent }: MapViewProps) {
           </div>
           <div className="relative bg-gray-100 h-64 z-0">
             <RealMap 
-              locations={MARKET_LOCATIONS.map(m => ({ ...m, count: getStallsCount(m.marketLocation) }))}
+              locations={MARKET_LOCATIONS.map(m => ({ 
+                ...m, 
+                count: getStallsCount(m.marketLocation),
+                hasFavorites: getFavoriteCount(m.marketLocation) > 0
+              }))}
               userLocation={userLocation}
               onSelectMarket={(id) => {
                 const market = MARKET_LOCATIONS.find(m => m.id === id);
@@ -115,12 +120,13 @@ export function MapView({ markets, filterComponent }: MapViewProps) {
             const distance = userLocation ? calculateDistance(userLocation.lat, userLocation.lng, market.lat, market.lng) : "0";
             const isSelected = selectedMarket?.id === market.id;
             const count = getStallsCount(market.marketLocation);
+            const favCount = getFavoriteCount(market.marketLocation);
             const isGray = count === 0;
             return (
               <div
                 key={market.id}
-                className={`bg-white rounded-xl shadow-lg overflow-hidden cursor-pointer transition-all ${isSelected ? "ring-2" : ""} ${isGray ? "opacity-60 grayscale" : ""}`}
-                style={{ borderLeft: `4px solid ${market.color}` }}
+                className={`bg-white rounded-xl shadow-lg overflow-hidden cursor-pointer transition-all ${isSelected ? "ring-2" : ""} ${isGray ? "opacity-60 grayscale" : ""} ${favCount > 0 ? "ring-2 ring-yellow-400" : ""}`}
+                style={{ borderLeft: `4px solid ${favCount > 0 ? '#facc15' : market.color}` }}
                 onClick={() => setSelectedMarket(isSelected ? null : market)}
               >
                 <div className="p-4">
@@ -130,7 +136,10 @@ export function MapView({ markets, filterComponent }: MapViewProps) {
                         <StoreIcon className="w-5 h-5" style={{ color: market.color }} />
                       </div>
                       <div className="flex-1 min-w-0">
-                        <h3 className="font-bold text-base truncate">{market.name}</h3>
+                        <h3 className="font-bold text-base truncate flex items-center gap-2">
+                          {market.name}
+                          {favCount > 0 && <span className="text-xs bg-yellow-100 text-yellow-700 px-2 py-0.5 rounded-full flex items-center gap-1">⭐ {favCount} favorito(s)</span>}
+                        </h3>
                         <p className="text-xs text-gray-600 truncate">{market.address}</p>
                       </div>
                     </div>

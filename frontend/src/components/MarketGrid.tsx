@@ -10,6 +10,7 @@ interface MarketGridProps {
   priceHistory: Record<string, PriceHistory[]>;
   averagePrices: Record<string, number>;
   referencePrices: Record<string, number>;
+  onToggleFavorite: (marketId: string) => void;
 }
 
 export function MarketGrid({
@@ -17,7 +18,8 @@ export function MarketGrid({
   onAddReview,
   priceHistory,
   averagePrices,
-  referencePrices
+  referencePrices,
+  onToggleFavorite
 }: MarketGridProps) {
   
   if (markets.length === 0) {
@@ -32,9 +34,15 @@ export function MarketGrid({
     );
   }
 
+  // Ordenar para que los favoritos salgan primero
+  const sortedMarkets = [...markets].sort((a, b) => {
+    if (a.isFavorite === b.isFavorite) return 0;
+    return a.isFavorite ? -1 : 1;
+  });
+
   return (
     <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-8">
-      {markets.map((market) => (
+      {sortedMarkets.map((market) => (
         <MarketCard
           key={market.id}
           market={market}
@@ -44,6 +52,7 @@ export function MarketGrid({
           priceHistory={priceHistory}
           averagePrices={averagePrices}
           referencePrices={referencePrices}
+          onToggleFavorite={onToggleFavorite}
         />
       ))}
     </div>
