@@ -67,6 +67,14 @@ export function Navbar({ currentView, onViewChange, currentUser, isVendorMode, o
                 onClick={() => onViewChange("login" as AppView)}
                 className="text-xs font-bold text-white hover:text-white/80 transition-colors drop-shadow-md cursor-pointer"
               >
+                {/* BOTÓN TEMPORAL PARA PROBAR EL PERFIL */}
+            <button 
+              onClick={() => onViewChange("perfil")} 
+              className="text-sm font-extrabold text-orange-500 hover:text-pink-500 transition-colors mr-4"
+            >
+               Mi Perfil (Prueba)
+            </button>
+
                 Ingresar
               </button>
               <button

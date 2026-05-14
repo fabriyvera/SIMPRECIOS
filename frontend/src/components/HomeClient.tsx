@@ -16,6 +16,7 @@ import { LoginView } from "@/components/LoginView";
 import { RegisterView } from "@/components/RegisterView";
 import { RecoverView } from "@/components/RecoverView";
 import { VerifyView } from "@/components/VerifyView";
+import { ProfileView } from "@/components/ProfileView";
 
 export default function HomeClient() {
   const [currentUser] = useState({
@@ -183,6 +184,9 @@ export default function HomeClient() {
   }
   if (currentView === "verificar") {
     return <VerifyView onViewChange={handleViewChange} />;
+  }
+  if (currentView === "perfil") {
+    return <ProfileView onViewChange={handleViewChange} />;
   }
 
   // ── Vista: panel de un puesto específico ──────────────────────────────────

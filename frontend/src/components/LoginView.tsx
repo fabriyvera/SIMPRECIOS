@@ -15,6 +15,10 @@ export function LoginView({ onViewChange }: LoginViewProps) {
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
     console.log('Login Frontend listo con:', email);
+  //solo por la prueba 
+    alert('¡Sesion iniciada con exito');
+    onViewChange('perfil');
+  // solo por la prueba
   };
 
   return (
