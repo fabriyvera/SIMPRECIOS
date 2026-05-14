@@ -13,10 +13,28 @@ export function RegisterView({ onViewChange }: RegisterViewProps) {
   const [name, setName] = useState('');
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
+  const [confirmPassword, setConfirmPassword] = useState('');
+  const [market, setMarket] = useState('');
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
-    console.log('Registro Frontend listo:', { role, name, email });
+    
+    if (password !== confirmPassword) {
+      alert('⚠️ Las contraseñas no coinciden. Por favor, verifica.');
+      return;
+    }
+
+    if (role === 'vendedora' && !market) {
+      alert('⚠️ Por favor, selecciona a qué mercado perteneces.');
+      return;
+    }
+
+    if (role === 'comprador') {
+      console.log('Registrando Comprador:', { role, name, email, password });
+    } else {
+      console.log('Registrando Caserita:', { role, name, email, password, market });
+    }
+    onViewChange('verificar');
   };
 
   return (
@@ -59,11 +77,31 @@ export function RegisterView({ onViewChange }: RegisterViewProps) {
             <input type="text" value={email} onChange={(e) => setEmail(e.target.value)} required className="w-full px-4 py-3 border border-gray-200 rounded-xl focus:ring-2 focus:ring-orange-500 focus:border-orange-500 outline-none transition-all bg-gray-50 focus:bg-white" />
           </div>
           
+          {role === 'vendedora' && (
+            <div className="p-4 bg-pink-50 rounded-xl border border-pink-100 animate-in fade-in slide-in-from-top-2 duration-300">
+              <label className="block text-sm font-bold text-pink-800 mb-1">Mercado al que pertenece</label>
+              <select value={market} onChange={(e) => setMarket(e.target.value)} required className="w-full px-4 py-3 border border-pink-200 rounded-xl focus:ring-2 focus:ring-pink-500 outline-none transition-all bg-white text-sm">
+                <option value="">Seleccione un mercado...</option>
+                <option value="Mercado Rodríguez">Mercado Rodríguez</option>
+                <option value="Mercado Lanza">Mercado Lanza</option>
+                <option value="Mercado Achumani">Mercado Achumani</option>
+                <option value="Mercado Miraflores">Mercado Miraflores</option>
+                <option value="Mercado Camacho">Mercado Camacho</option>
+                <option value="Mercado Uruguay">Mercado Uruguay</option>
+                <option value="Otro">Otro...</option>
+              </select>
+            </div>
+          )}
+          
           <div>
             <label className="block text-sm font-bold text-gray-700 mb-1">Contraseña</label>
             <input type="password" value={password} onChange={(e) => setPassword(e.target.value)} required className="w-full px-4 py-3 border border-gray-200 rounded-xl focus:ring-2 focus:ring-orange-500 focus:border-orange-500 outline-none transition-all bg-gray-50 focus:bg-white" />
           </div>
-          
+          <div>
+            <label className="block text-sm font-bold text-gray-700 mb-1">Confirmar Contraseña</label>
+            <input type="password" value={confirmPassword} onChange={(e) => setConfirmPassword(e.target.value)} required className="w-full px-4 py-3 border border-gray-200 rounded-xl focus:ring-2 focus:ring-orange-500 focus:border-orange-500 outline-none transition-all bg-gray-50 focus:bg-white" />
+          </div>
+
           <button type="submit" className="w-full bg-gradient-to-r from-orange-500 via-red-500 to-pink-500 hover:opacity-90 text-white font-bold py-3.5 rounded-xl shadow-md transition-opacity mt-4">
             Registrarme
           </button>

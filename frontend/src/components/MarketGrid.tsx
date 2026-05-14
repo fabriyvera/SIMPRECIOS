@@ -6,10 +6,13 @@ import { Market, PriceHistory } from "@/types";
 interface MarketGridProps {
   markets: Market[];
   onAddReview: (marketId: string, rating: number, comment: string) => void;
-  // Añadimos estas props para que coincidan con lo que MarketCard espera
   priceHistory: Record<string, PriceHistory[]>;
   averagePrices: Record<string, number>;
   referencePrices: Record<string, number>;
+  allMarkets: Market[];
+  favoriteMarketIds: string[];
+  onToggleFavorite: (marketId: string) => void;
+  onReportOverprice: (marketId: string, report: any) => void; // solo este
 }
 
 export function MarketGrid({
@@ -17,7 +20,11 @@ export function MarketGrid({
   onAddReview,
   priceHistory,
   averagePrices,
-  referencePrices
+  referencePrices,
+  allMarkets,
+  favoriteMarketIds,
+  onToggleFavorite,
+  onReportOverprice
 }: MarketGridProps) {
   
   if (markets.length === 0) {
@@ -39,11 +46,13 @@ export function MarketGrid({
           key={market.id}
           market={market}
           onAddReview={onAddReview}
-          // Pasamos la lista completa de mercados para que PriceComparison funcione
-          allMarkets={markets} 
+          allMarkets={allMarkets}
           priceHistory={priceHistory}
           averagePrices={averagePrices}
           referencePrices={referencePrices}
+          isFavorite={favoriteMarketIds.includes(market.id)}
+          onToggleFavorite={onToggleFavorite}
+          onReportOverprice={onReportOverprice}
         />
       ))}
     </div>

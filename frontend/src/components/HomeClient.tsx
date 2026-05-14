@@ -3,56 +3,157 @@
 import { useState, useMemo } from "react";
 import { SearchAndFilter } from "@/components/SearchAndFilter";
 import { MarketGrid } from "@/components/MarketGrid";
-import { VendorDashboard } from "@/components/VendorDashboard"; 
+import { VendorDashboard } from "@/components/VendorDashboard";
 import { Navbar } from "@/components/Navbar";
 import { MapView } from "@/components/MapView";
 import { AIBasket } from "@/components/AIBasket";
-import { ArrowLeft, Store, ShoppingBag } from "lucide-react";
-import { Button } from "@/components/ui/button";
+import { ShoppingBag, Store, ArrowLeft } from "lucide-react";
 import { Avatar } from "@/components/ui/avatar";
+import { Button } from "@/components/ui/button";
 import { INITIAL_MARKETS, REFERENCE_PRICES, generatePriceHistory } from "@/lib/data";
 import { Market, AppView, PriceHistory } from "@/types";
 import { LoginView } from "@/components/LoginView";
 import { RegisterView } from "@/components/RegisterView";
 import { RecoverView } from "@/components/RecoverView";
+import { VerifyView } from "@/components/VerifyView";
+import { ProfileView } from "@/components/ProfileView";
 
 export default function HomeClient() {
-  const [currentUser] = useState({ name: "Juan Pérez", avatar: "JP", isVendor: true });
+  const [currentUser] = useState({
+    name: "Juan Pérez",
+    avatar: "JP",
+    isVendor: true,
+  });
+
   const [currentView, setCurrentView] = useState<AppView>("home");
   const [isVendorMode, setIsVendorMode] = useState(false);
   const [selectedVendorMarket, setSelectedVendorMarket] = useState<string | null>(null);
   const [markets, setMarkets] = useState<Market[]>(INITIAL_MARKETS);
   const [searchTerm, setSearchTerm] = useState("");
   const [selectedCategory, setSelectedCategory] = useState("all");
+  const [sortBy, setSortBy] = useState("name");
+  const [showOpenOnly, setShowOpenOnly] = useState(false);
   const [selectedMarketLocation, setSelectedMarketLocation] = useState("all");
 
-  // --- Handlers para el Dashboard ---
-  const handleUpdatePrice = (mId: string, pId: string, price: number) => {
-    setMarkets(prev => prev.map(m => m.id === mId ? {
-      ...m, products: m.products.map(p => p.id === pId ? { ...p, price } : p)
-    } : m));
+  // Favoritos (persistencia local)
+  const [favoriteMarketIds, setFavoriteMarketIds] = useState<string[]>(() => {
+    if (typeof window !== "undefined") {
+      const saved = localStorage.getItem("favoriteMarkets");
+      return saved ? JSON.parse(saved) : [];
+    }
+    return [];
+  });
+
+  // Denuncias de sobreprecio (solo estado local)
+  const [overpriceReports, setOverpriceReports] = useState<any[]>([]);
+
+  // ========== HANDLERS ==========
+  const handleToggleVendorMode = () => {
+    if (isVendorMode) {
+      setIsVendorMode(false);
+      setCurrentView("home");
+      setSelectedVendorMarket(null);
+    } else {
+      setIsVendorMode(true);
+      setCurrentView("vendor");
+    }
   };
 
-  const handleRegisterProduct = (mId: string, name: string, price: number) => {
-    setMarkets(prev => prev.map(m => m.id === mId ? {
-      ...m, products: [...m.products, { id: `p-${Date.now()}`, name, price, available: true }]
-    } : m));
+  const handleViewChange = (view: AppView) => {
+    console.log("Cambiando a vista:", view);
+    if (view === "vendor") {
+      setIsVendorMode(true);
+      setSelectedVendorMarket(null);
+    } else {
+      setIsVendorMode(false);
+    }
+    setCurrentView(view);
   };
 
-  const handleToggleStock = (mId: string, pId: string) => {
-    setMarkets(prev => prev.map(m => m.id === mId ? {
-      ...m, products: m.products.map(p => p.id === pId ? { ...p, available: !p.available } : p)
-    } : m));
+  const handleUpdatePrice = (marketId: string, productId: string, newPrice: number) => {
+    setMarkets((prev) =>
+      prev.map((market) =>
+        market.id === marketId
+          ? {
+              ...market,
+              products: market.products.map((p) =>
+                p.id === productId ? { ...p, price: newPrice } : p
+              ),
+            }
+          : market
+      )
+    );
   };
 
-  // --- Memos para cálculos ---
+  const handleToggleStock = (marketId: string, productId: string) => {
+    setMarkets((prev) =>
+      prev.map((market) =>
+        market.id === marketId
+          ? {
+              ...market,
+              products: market.products.map((p) =>
+                p.id === productId ? { ...p, available: !p.available } : p
+              ),
+            }
+          : market
+      )
+    );
+  };
+
+  const handleAddReview = (marketId: string, rating: number, comment: string) => {
+    setMarkets((prev) =>
+      prev.map((market) => {
+        if (market.id !== marketId) return market;
+        const newReview = {
+          id: `r${Date.now()}`,
+          userName: currentUser.name,
+          rating,
+          comment,
+          date: new Date().toLocaleDateString("es-ES", {
+            day: "numeric",
+            month: "short",
+            year: "numeric",
+          }),
+        };
+        const updatedReviews = [...market.reviews, newReview];
+        const newRating =
+          updatedReviews.reduce((acc, r) => acc + r.rating, 0) / updatedReviews.length;
+        return { ...market, reviews: updatedReviews, rating: Number(newRating.toFixed(1)) };
+      })
+    );
+  };
+
+  // Favoritos
+  const handleToggleFavorite = (marketId: string) => {
+    setFavoriteMarketIds((prev) => {
+      const next = prev.includes(marketId)
+        ? prev.filter((id) => id !== marketId)
+        : [...prev, marketId];
+      localStorage.setItem("favoriteMarkets", JSON.stringify(next));
+      return next;
+    });
+  };
+
+  // Denuncias
+  const handleReportOverprice = (
+    marketId: string,
+    report: { productName: string; reportedPrice: string; comment: string }
+  ) => {
+    const newReport = { marketId, ...report, timestamp: new Date().toISOString() };
+    setOverpriceReports((prev) => [...prev, newReport]);
+    console.log("Denuncia registrada:", newReport);
+  };
+
+  // ========== MEMOS ==========
   const averagePrices = useMemo(() => {
-    const averages: Record<string, number> = {};
     const priceMap: Record<string, number[]> = {};
-    markets.forEach(m => m.products.forEach(p => {
-      if (!priceMap[p.name]) priceMap[p.name] = [];
-      priceMap[p.name].push(p.price);
-    }));
+    markets.forEach((market) => {
+      market.products.forEach((product) => {
+        if (!priceMap[product.name]) priceMap[product.name] = [];
+        priceMap[product.name].push(product.price);
+      });
+    });
+    const averages: Record<string, number> = {};
     Object.entries(priceMap).forEach(([name, prices]) => {
       averages[name] = prices.reduce((a, b) => a + b, 0) / prices.length;
     });
@@ -61,33 +162,89 @@ export default function HomeClient() {
 
   const priceHistory = useMemo(() => {
     const history: Record<string, PriceHistory[]> = {};
-    markets.forEach(m => m.products.forEach(p => {
-      if (!history[p.name]) history[p.name] = generatePriceHistory(p.price);
-    }));
+    markets.forEach((market) => {
+      market.products.forEach((product) => {
+        if (!history[product.name]) {
+          history[product.name] = generatePriceHistory(product.price);
+        }
+      });
+    });
     return history;
   }, [markets]);
 
-  // --- Lógica de Vistas ---
+  const categories = useMemo(
+    () => [...new Set(markets.map((m) => m.category))].sort(),
+    [markets]
+  );
 
-  // VISTA 1: DASHBOARD DETALLADO (Cuando entras a un puesto)
+  const marketLocations = useMemo(
+    () => [...new Set(markets.map((m) => m.marketLocation))].sort(),
+    [markets]
+  );
+
+  const filteredAndSortedMarkets = useMemo(() => {
+    let filtered = markets.filter((market) => {
+      const matchesSearch =
+        market.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
+        market.description.toLowerCase().includes(searchTerm.toLowerCase());
+      const matchesCategory =
+        selectedCategory === "all" || market.category === selectedCategory;
+      const matchesOpenStatus = !showOpenOnly || market.isOpen;
+      const matchesLocation =
+        selectedMarketLocation === "all" || market.marketLocation === selectedMarketLocation;
+      return matchesSearch && matchesCategory && matchesOpenStatus && matchesLocation;
+    });
+
+    filtered.sort((a, b) => {
+      switch (sortBy) {
+        case "name": return a.name.localeCompare(b.name);
+        case "name-desc": return b.name.localeCompare(a.name);
+        case "rating": return a.rating - b.rating;
+        case "rating-desc": return b.rating - a.rating;
+        default: return 0;
+      }
+    });
+
+    return filtered;
+  }, [markets, searchTerm, selectedCategory, sortBy, showOpenOnly, selectedMarketLocation]);
+
+  // ========== VISTAS DE AUTENTICACIÓN ==========
+  if (currentView === "login") return <LoginView onViewChange={handleViewChange} />;
+  if (currentView === "registro") return <RegisterView onViewChange={handleViewChange} />;
+  if (currentView === "recuperar") return <RecoverView onViewChange={handleViewChange} />;
+  if (currentView === "verificar") return <VerifyView onViewChange={handleViewChange} />;
+  if (currentView === "perfil") return <ProfileView onViewChange={handleViewChange} />;
+
+  // ========== PANEL DE VENDEDOR (puesto específico) ==========
   if (isVendorMode && selectedVendorMarket) {
-    const market = markets.find(m => m.id === selectedVendorMarket);
+    const market = markets.find((m) => m.id === selectedVendorMarket);
     if (market) {
       return (
         <div className="min-h-screen bg-background">
-          <div className="bg-gradient-to-r from-purple-600 to-blue-600 text-white py-4 px-6 shadow-md">
-            <Button variant="ghost" className="text-white hover:bg-white/20" onClick={() => setSelectedVendorMarket(null)}>
-              <ArrowLeft className="w-4 h-4 mr-2" /> Volver a mis puestos
-            </Button>
+          <div className="bg-gradient-to-r from-purple-600 to-blue-600 text-white py-6 px-4 shadow-lg">
+            <div className="container mx-auto">
+              <Button
+                variant="ghost"
+                className="text-white hover:bg-white/20 mb-4"
+                onClick={() => setSelectedVendorMarket(null)}
+              >
+                <ArrowLeft className="w-4 h-4 mr-2" />
+                Volver a Mis Puestos
+              </Button>
+            </div>
           </div>
-          <div className="container mx-auto p-6">
+          <div className="container mx-auto px-4 py-8">
             <VendorDashboard
               market={market}
-              onUpdatePrice={(pid, price) => handleUpdatePrice(market.id, pid, price)}
-              onMarkRestocked={(pid) => handleToggleStock(market.id, pid)}
-              onRegisterProduct={(n, p) => handleRegisterProduct(market.id, n, p)}
-              onToggleStock={(pid) => handleToggleStock(market.id, pid)}
-              onNotifyStock={(pid) => console.log(pid)}
+              onUpdatePrice={(productId, newPrice) =>
+                handleUpdatePrice(market.id, productId, newPrice)
+              }
+              onMarkRestocked={(productId) => handleToggleStock(market.id, productId)}
+              onRegisterProduct={(name, price) => {
+                console.log("Registrar producto", name, price);
+              }}
+              onToggleStock={(productId) => handleToggleStock(market.id, productId)}
+              onNotifyStock={(productId) => console.log("Notificar", productId)}
               priceHistory={priceHistory}
               averagePrices={averagePrices}
               referencePrices={REFERENCE_PRICES}
@@ -98,33 +255,43 @@ export default function HomeClient() {
     }
   }
 
-  // VISTA 2: LISTA DE PUESTOS DEL VENDEDOR
+  // ========== LISTA DE PUESTOS DEL VENDEDOR ==========
   if (isVendorMode) {
     return (
       <div className="min-h-screen bg-background">
-        <div className="bg-gradient-to-r from-purple-600 to-blue-600 text-white p-8">
-          <div className="container mx-auto flex justify-between items-center">
-            <div className="flex items-center gap-3">
-              <Store className="w-10 h-10" />
-              <h1 className="text-3xl font-bold">Mis Puestos</h1>
-            </div>
-            <Button onClick={() => setIsVendorMode(false)} className="bg-white text-purple-600 hover:bg-gray-100">
-              <ShoppingBag className="w-4 h-4 mr-2" /> Modo Comprador
-            </Button>
-          </div>
-        </div>
-        <div className="container mx-auto p-8 grid grid-cols-1 md:grid-cols-3 gap-6">
-          {markets.slice(0, 3).map(m => (
-            <div key={m.id} onClick={() => setSelectedVendorMarket(m.id)} className="bg-white rounded-2xl shadow-lg overflow-hidden cursor-pointer hover:scale-105 transition-transform border-l-8" style={{ borderLeftColor: m.color }}>
-              <img src={m.image} className="h-40 w-full object-cover" alt={m.name} />
-              <div className="p-5">
-                <h3 className="text-xl font-bold">{m.name}</h3>
-                <p className="text-blue-600 font-medium">Gestionar Precios →</p>
+        <div className="bg-gradient-to-r from-purple-600 to-blue-600 text-white py-8 px-4 shadow-lg">
+          <div className="container mx-auto">
+            <div className="flex items-center justify-between">
+              <div className="flex items-center gap-3">
+                <div className="bg-white/20 p-3 rounded-2xl backdrop-blur-sm">
+                  <Store className="w-8 h-8" />
+                </div>
+                <div>
+                  <h1 className="mb-0 text-white drop-shadow-lg">🏪 Panel de Vendedor</h1>
+                  <p className="text-white/90 text-lg">Gestiona tus puestos y precios</p>
+                </div>
+              </div>
+              <div className="flex items-center gap-3">
+                <Button
+                  onClick={handleToggleVendorMode}
+                  className="bg-white/20 hover:bg-white/30 text-white"
+                >
+                  <ShoppingBag className="w-4 h-4 mr-2" />
+                  Modo Comprador
+                </Button>
+                <div className="flex items-center gap-3 bg-white/20 rounded-full pl-4 pr-2 py-2 backdrop-blur-sm">
+                  <span className="text-sm font-bold text-white">{currentUser.name}</span>
+                  <Avatar className="w-11 h-11 border-2 border-white shadow-lg">
+                    <div className="w-full h-full bg-gradient-to-br from-yellow-400 to-orange-500 flex items-center justify-center">
+                      <span className="font-bold text-white">{currentUser.avatar}</span>
+                    </div>
+                  </Avatar>
+                </div>
               </div>
             </div>
-        ))}
+          </div>
         </div>
-          
+
         <div className="container mx-auto px-4 py-8">
           <div className="mb-6">
             <h2 className="text-2xl font-bold mb-2">Mis Puestos</h2>
@@ -167,37 +334,60 @@ export default function HomeClient() {
     );
   }
 
-  // VISTA 3: MODO COMPRADOR (HOME)
+  // ========== VISTA COMPRADOR (HOME, MAPA, AI) ==========
   return (
     <div className="min-h-screen bg-background pb-20">
-      <Navbar 
-        currentView={currentView} 
-        onViewChange={setCurrentView} 
-        currentUser={currentUser} 
+      <Navbar
+        currentView={currentView}
+        onViewChange={handleViewChange}
+        currentUser={currentUser}
         isVendorMode={isVendorMode}
-        onToggleVendorMode={() => setIsVendorMode(!isVendorMode)} 
+        onToggleVendorMode={handleToggleVendorMode}
       />
-      <div className="container mx-auto px-4 py-6">
-        {currentView === "home" && (
-          <>
-            <SearchAndFilter 
-              searchTerm={searchTerm} onSearchChange={setSearchTerm}
-              selectedCategory={selectedCategory} onCategoryChange={setSelectedCategory}
-              selectedMarketLocation={selectedMarketLocation} onMarketLocationChange={setSelectedMarketLocation}
-              categories={[]} marketLocations={[]} sortBy="name" onSortChange={() => {}} showOpenOnly={false} onShowOpenOnlyChange={() => {}}
-            />
-            <MarketGrid 
-              markets={markets.filter(m => m.name.toLowerCase().includes(searchTerm.toLowerCase()))} 
-              onAddReview={() => {}} 
-              priceHistory={priceHistory}
-              averagePrices={averagePrices}
-              referencePrices={REFERENCE_PRICES}
-            />
-          </>
-        )}
-        {currentView === "map" && <MapView markets={markets} />}
-        {currentView === "ai" && <AIBasket markets={markets} />}
-      </div>
+
+      {currentView === "map" && <MapView markets={markets} />}
+
+      {currentView === "ai" && <AIBasket markets={markets} />}
+
+      {currentView === "home" && (
+        <div className="px-4 py-4">
+          <SearchAndFilter
+            searchTerm={searchTerm}
+            onSearchChange={setSearchTerm}
+            selectedCategory={selectedCategory}
+            onCategoryChange={setSelectedCategory}
+            sortBy={sortBy}
+            onSortChange={setSortBy}
+            categories={categories}
+            showOpenOnly={showOpenOnly}
+            onShowOpenOnlyChange={setShowOpenOnly}
+            selectedMarketLocation={selectedMarketLocation}
+            onMarketLocationChange={setSelectedMarketLocation}
+            marketLocations={marketLocations}
+          />
+
+          <div className="mb-4 bg-white rounded-xl p-3 shadow-sm border-l-4 border-orange-500">
+            <p className="text-sm font-bold text-gray-700">
+              📊 {filteredAndSortedMarkets.length} de {markets.length} puestos
+              {selectedMarketLocation !== "all" && (
+                <span className="ml-2 text-orange-600">en {selectedMarketLocation}</span>
+              )}
+            </p>
+          </div>
+
+          <MarketGrid
+            markets={filteredAndSortedMarkets}
+            onAddReview={handleAddReview}
+            allMarkets={markets}
+            priceHistory={priceHistory}
+            averagePrices={averagePrices}
+            referencePrices={REFERENCE_PRICES}
+            favoriteMarketIds={favoriteMarketIds}
+            onToggleFavorite={handleToggleFavorite}
+            onReportOverprice={handleReportOverprice}
+          />
+        </div>
+      )}
     </div>
   );
 }
