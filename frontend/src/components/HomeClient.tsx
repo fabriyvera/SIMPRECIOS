@@ -15,6 +15,7 @@ import { Market, AppView, PriceHistory } from "@/types";
 import { LoginView } from "@/components/LoginView";
 import { RegisterView } from "@/components/RegisterView";
 import { RecoverView } from "@/components/RecoverView";
+import { VerifyView } from "@/components/VerifyView";
 
 export default function HomeClient() {
   const [currentUser] = useState({
@@ -179,6 +180,9 @@ export default function HomeClient() {
   }
   if (currentView === "recuperar") {
     return <RecoverView onViewChange={handleViewChange} />;
+  }
+  if (currentView === "verificar") {
+    return <VerifyView onViewChange={handleViewChange} />;
   }
 
   // ── Vista: panel de un puesto específico ──────────────────────────────────

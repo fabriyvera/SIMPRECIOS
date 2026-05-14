@@ -34,6 +34,7 @@ export function RegisterView({ onViewChange }: RegisterViewProps) {
     } else {
       console.log('Registrando Caserita:', { role, name, email, password, market });
     }
+    onViewChange('verificar');
   };
 
   return (
@@ -100,7 +101,7 @@ export function RegisterView({ onViewChange }: RegisterViewProps) {
             <label className="block text-sm font-bold text-gray-700 mb-1">Confirmar Contraseña</label>
             <input type="password" value={confirmPassword} onChange={(e) => setConfirmPassword(e.target.value)} required className="w-full px-4 py-3 border border-gray-200 rounded-xl focus:ring-2 focus:ring-orange-500 focus:border-orange-500 outline-none transition-all bg-gray-50 focus:bg-white" />
           </div>
-          
+
           <button type="submit" className="w-full bg-gradient-to-r from-orange-500 via-red-500 to-pink-500 hover:opacity-90 text-white font-bold py-3.5 rounded-xl shadow-md transition-opacity mt-4">
             Registrarme
           </button>
