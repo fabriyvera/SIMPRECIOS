@@ -61,6 +61,7 @@ export function AIBasket({ markets }: AIBasketProps) {
   // Estados de Resultados (Paso 3)
   const [generatedBasket, setGeneratedBasket] = useState<GeneratedBasket | null>(null);
   const [isGenerating, setIsGenerating] = useState(false);
+  const [isSaving, setIsSaving] = useState(false);
 
   // Manejo de Checkboxes granulares
   const toggleItem = (name: string) => {
@@ -82,7 +83,6 @@ export function AIBasket({ markets }: AIBasketProps) {
       let remainingBudget = weeklyBudget;
       let requiredCost = 0;
 
-      // ALGORITMO GRANULAR: Solo procesa los items seleccionados por el usuario
       const filteredEssentials = ESSENTIALS.filter(item => selectedItems.includes(item.name));
 
       for (const essential of filteredEssentials) {
@@ -123,6 +123,20 @@ export function AIBasket({ markets }: AIBasketProps) {
       });
       setIsGenerating(false);
     }, 1500);
+  };
+
+  const handleSaveBasket = async () => {
+    setIsSaving(true);
+    try {
+      // Simulación de la latencia de base de datos (1 segundo)
+      await new Promise(resolve => setTimeout(resolve, 1000));
+      alert("¡Canasta guardada exitosamente en tu perfil!");
+    } catch (error) {
+      console.error(error);
+      alert("Error al guardar la canasta");
+    } finally {
+      setIsSaving(false);
+    }
   };
 
   const groupByCategory = (items: BasketItem[]) => {
@@ -312,8 +326,13 @@ export function AIBasket({ markets }: AIBasketProps) {
               ))}
 
               <div className="flex gap-3 pt-4">
-                 <Button className="flex-1 h-14 bg-white border-2 border-purple-600 text-purple-600 hover:bg-purple-50 font-black rounded-2xl shadow-md">
-                   <Save className="w-5 h-5 mr-2" /> Guardar
+                 <Button 
+                  onClick={handleSaveBasket} 
+                  disabled={isSaving} 
+                  className="flex-1 h-14 bg-white border-2 border-purple-600 text-purple-600 hover:bg-purple-50 font-black rounded-2xl shadow-md transition-all"
+                 >
+                  {isSaving ? <Sparkles className="w-5 h-5 mr-2 animate-spin" /> : <Save className="w-5 h-5 mr-2" />} 
+                  {isSaving ? "Guardando..." : "Guardar"}
                  </Button>
                  <Button variant="ghost" onClick={() => setStep(1)} className="flex-1 h-14 bg-gray-100 text-gray-600 font-black rounded-2xl">
                    Nueva Consulta
