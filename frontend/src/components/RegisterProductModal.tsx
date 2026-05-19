@@ -36,10 +36,16 @@ export function RegisterProductModal({
       return;
     }
 
-    onRegister(productName.trim(), priceNum);
-    setProductName("");
-    setPrice("");
+    // Primero gatillamos el cierre del modal
     onClose();
+
+    // Pequeño retardo para dar tiempo a la animación de Radix de desmontarse
+    // y permitir que el Dashboard tome el flujo de actualización y lance el toast
+    setTimeout(() => {
+      onRegister(productName.trim(), priceNum);
+      setProductName("");
+      setPrice("");
+    }, 100);
   };
 
   const handleClose = () => {
