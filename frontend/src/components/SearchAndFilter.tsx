@@ -79,6 +79,7 @@ export function SearchAndFilter({
                 <SelectItem value="name-desc">📝 Nombre Z-A</SelectItem>
                 <SelectItem value="rating">⭐ Calificación Baja-Alta</SelectItem>
                 <SelectItem value="rating-desc">⭐ Calificación Alta-Baja</SelectItem>
+                <SelectItem value="distance">📍 Distancia (Menor a Mayor)</SelectItem>
               </SelectContent>
             </Select>
           </div>

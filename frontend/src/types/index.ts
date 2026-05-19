@@ -42,3 +42,20 @@ export interface CurrentUser {
   avatar: string;
   isVendor: boolean;
 }
+
+export interface MarketLocation {
+  id: string;
+  name: string;
+  marketLocation: string;
+  color: string;
+  lat: number;
+  lng: number;
+  address: string;
+  phone: string;
+  hours: string;
+}
+
+export interface UserLocation {
+  lat: number;
+  lng: number;
+}

@@ -20,6 +20,7 @@ interface MarketCardProps {
   averagePrices: Record<string, number>;
   referencePrices: Record<string, number>;
   onToggleFavorite: (marketId: string) => void;
+  distance?: string;
 }
 
 export function MarketCard({
@@ -29,7 +30,8 @@ export function MarketCard({
   priceHistory,
   averagePrices,
   referencePrices,
-  onToggleFavorite
+  onToggleFavorite,
+  distance
 }: MarketCardProps) {
   const [showProducts, setShowProducts] = useState(false);
   const [showReviews, setShowReviews] = useState(false);
@@ -72,9 +74,16 @@ export function MarketCard({
         >
           {market.isOpen ? "🟢 ABIERTO" : "🔴 CERRADO"}
         </Badge>
-        <div className="absolute bottom-3 left-3 flex items-center gap-2 bg-white/95 rounded-full px-3 py-1.5 shadow-lg">
-          <MapPin className="w-3.5 h-3.5 text-orange-600" />
-          <span className="text-xs font-medium text-gray-700">{market.marketLocation}</span>
+        <div className="absolute bottom-3 left-3 flex items-center gap-2">
+          <div className="flex items-center gap-2 bg-white/95 rounded-full px-3 py-1.5 shadow-lg">
+            <MapPin className="w-3.5 h-3.5 text-orange-600" />
+            <span className="text-xs font-medium text-gray-700">{market.marketLocation}</span>
+          </div>
+          {distance && (
+            <div className="flex items-center gap-1 bg-blue-100 text-blue-800 rounded-full px-3 py-1.5 shadow-lg font-bold border border-blue-200">
+              <span className="text-xs">📍 A {distance} km de ti</span>
+            </div>
+          )}
         </div>
       </div>
 

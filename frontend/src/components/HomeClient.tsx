@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useMemo } from "react";
+import { useState, useMemo, useEffect } from "react";
 import { SearchAndFilter } from "@/components/SearchAndFilter";
 import { MarketGrid } from "@/components/MarketGrid";
 import { VendorDashboard } from "@/components/VendorDashboard"; 
@@ -10,8 +10,8 @@ import { AIBasket } from "@/components/AIBasket";
 import { ArrowLeft, Store, ShoppingBag } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Avatar } from "@/components/ui/avatar";
-import { INITIAL_MARKETS, REFERENCE_PRICES, generatePriceHistory } from "@/lib/data";
-import { Market, AppView, PriceHistory } from "@/types";
+import { INITIAL_MARKETS, REFERENCE_PRICES, generatePriceHistory, MARKET_LOCATIONS, calculateDistance } from "@/lib/data";
+import { Market, AppView, PriceHistory, UserLocation } from "@/types";
 import { LoginView } from "@/components/LoginView";
 import { RegisterView } from "@/components/RegisterView";
 import { RecoverView } from "@/components/RecoverView";
@@ -26,6 +26,18 @@ export default function HomeClient() {
   const [selectedCategory, setSelectedCategory] = useState("all");
   const [selectedMarketLocation, setSelectedMarketLocation] = useState("all");
   const [showFavoritesOnly, setShowFavoritesOnly] = useState(false);
+  const [sortBy, setSortBy] = useState("name");
+  const [showOpenOnly, setShowOpenOnly] = useState(false);
+  const [userLocation, setUserLocation] = useState<UserLocation | null>(null);
+
+  useEffect(() => {
+    if (!("geolocation" in navigator)) return;
+    navigator.geolocation.getCurrentPosition(
+      (pos) => setUserLocation({ lat: pos.coords.latitude, lng: pos.coords.longitude }),
+      () => setUserLocation({ lat: -16.5000, lng: -68.1500 }), // default La Paz
+      { enableHighAccuracy: false, timeout: 5000, maximumAge: 0 }
+    );
+  }, []);
 
   // --- Memos para filtros ---
   const categories = useMemo(() => [...new Set(markets.map(m => m.category))].sort(), [markets]);
@@ -37,9 +49,10 @@ export default function HomeClient() {
       const matchCat = selectedCategory === "all" || m.category === selectedCategory;
       const matchLoc = selectedMarketLocation === "all" || m.marketLocation === selectedMarketLocation;
       const matchFav = !showFavoritesOnly || m.isFavorite;
-      return matchSearch && matchCat && matchLoc && matchFav;
+      const matchOpen = !showOpenOnly || m.isOpen;
+      return matchSearch && matchCat && matchLoc && matchFav && matchOpen;
     });
-  }, [markets, searchTerm, selectedCategory, selectedMarketLocation, showFavoritesOnly]);
+  }, [markets, searchTerm, selectedCategory, selectedMarketLocation, showFavoritesOnly, showOpenOnly]);
 
   // --- Handlers para el Dashboard ---
   const handleUpdatePrice = (mId: string, pId: string, price: number) => {
@@ -194,7 +207,9 @@ export default function HomeClient() {
       searchTerm={searchTerm} onSearchChange={setSearchTerm}
       selectedCategory={selectedCategory} onCategoryChange={setSelectedCategory}
       selectedMarketLocation={selectedMarketLocation} onMarketLocationChange={setSelectedMarketLocation}
-      categories={categories} marketLocations={marketLocations} sortBy="name" onSortChange={() => {}} showOpenOnly={false} onShowOpenOnlyChange={() => {}}
+      categories={categories} marketLocations={marketLocations} 
+      sortBy={sortBy} onSortChange={setSortBy} 
+      showOpenOnly={showOpenOnly} onShowOpenOnlyChange={setShowOpenOnly}
       showFavoritesOnly={showFavoritesOnly} onShowFavoritesOnlyChange={setShowFavoritesOnly}
     />
   );
@@ -219,10 +234,12 @@ export default function HomeClient() {
               averagePrices={averagePrices}
               referencePrices={REFERENCE_PRICES}
               onToggleFavorite={handleToggleFavorite}
+              userLocation={userLocation}
+              sortBy={sortBy}
             />
           </>
         )}
-        {currentView === "map" && <MapView markets={filteredMarkets} filterComponent={searchAndFilterComponent} />}
+        {currentView === "map" && <MapView markets={filteredMarkets} filterComponent={searchAndFilterComponent} userLocation={userLocation} />}
         {currentView === "ai" && <AIBasket markets={markets} />}
       </div>
     </div>

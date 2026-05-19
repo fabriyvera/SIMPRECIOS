@@ -6,64 +6,17 @@ import { MapPin, Navigation, Store as StoreIcon, Phone, Clock } from "lucide-rea
 
 const RealMap = dynamic(() => import("./RealMap"), { ssr: false, loading: () => <div className="h-full w-full flex items-center justify-center bg-gray-100 text-gray-500">Cargando mapa...</div> });
 import { Button } from "@/components/ui/button";
-import { Market } from "@/types";
+import { Market, UserLocation, MarketLocation } from "@/types";
+import { MARKET_LOCATIONS, calculateDistance } from "@/lib/data";
 
 interface MapViewProps {
   markets: Market[];
   filterComponent?: ReactNode;
+  userLocation: UserLocation | null;
 }
 
-interface MarketLocation {
-  id: string;
-  name: string;
-  marketLocation: string;
-  color: string;
-  lat: number;
-  lng: number;
-  address: string;
-  phone: string;
-  hours: string;
-}
-
-const MARKET_LOCATIONS: MarketLocation[] = [
-  { id: "central", name: "Mercado Central", marketLocation: "Mercado Central", color: "#f44336", lat: -16.5000, lng: -68.1500, address: "Av. Ismael Montes, La Paz", phone: "+591 2-2345678", hours: "Lun-Dom: 6:00 AM - 7:00 PM" },
-  { id: "puerto", name: "Mercado del Puerto", marketLocation: "Mercado del Puerto", color: "#2196f3", lat: -16.5100, lng: -68.1400, address: "Zona Puerto, La Paz", phone: "+591 2-2345679", hours: "Mar-Dom: 6:00 AM - 5:00 PM" },
-  { id: "norte", name: "Mercado Norte", marketLocation: "Mercado Norte", color: "#4caf50", lat: -16.4900, lng: -68.1600, address: "Zona Norte, La Paz", phone: "+591 2-2345680", hours: "Lun-Sáb: 7:00 AM - 6:00 PM" },
-];
-
-export function MapView({ markets, filterComponent }: MapViewProps) {
-  const [userLocation, setUserLocation] = useState<{ lat: number; lng: number } | null>(null);
+export function MapView({ markets, filterComponent, userLocation }: MapViewProps) {
   const [selectedMarket, setSelectedMarket] = useState<MarketLocation | null>(null);
-  const [locationError, setLocationError] = useState<string | null>(null);
-
-  useEffect(() => {
-    if (!("geolocation" in navigator)) {
-      setLocationError("Tu navegador no soporta geolocalización. Usando ubicación predeterminada.");
-      setUserLocation({ lat: -16.5000, lng: -68.1500 });
-      return;
-    }
-    navigator.geolocation.getCurrentPosition(
-      (pos) => setUserLocation({ lat: pos.coords.latitude, lng: pos.coords.longitude }),
-      (err) => {
-        const msgs: Record<number, string> = {
-          1: "Has denegado el permiso de ubicación. Usando ubicación predeterminada.",
-          2: "Información de ubicación no disponible. Usando ubicación predeterminada.",
-          3: "La solicitud de ubicación ha caducado. Usando ubicación predeterminada.",
-        };
-        setLocationError(msgs[err.code] ?? "Error al obtener ubicación. Usando ubicación predeterminada.");
-        setUserLocation({ lat: -16.5000, lng: -68.1500 });
-      },
-      { enableHighAccuracy: false, timeout: 5000, maximumAge: 0 }
-    );
-  }, []);
-
-  const calculateDistance = (lat1: number, lng1: number, lat2: number, lng2: number) => {
-    const R = 6371;
-    const dLat = (lat2 - lat1) * Math.PI / 180;
-    const dLng = (lng2 - lng1) * Math.PI / 180;
-    const a = Math.sin(dLat / 2) ** 2 + Math.cos(lat1 * Math.PI / 180) * Math.cos(lat2 * Math.PI / 180) * Math.sin(dLng / 2) ** 2;
-    return (R * 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a))).toFixed(1);
-  };
 
   const getStallsCount = (marketLocation: string) => markets.filter((m) => m.marketLocation === marketLocation).length;
   const getFavoriteCount = (marketLocation: string) => markets.filter((m) => m.marketLocation === marketLocation && m.isFavorite).length;
@@ -75,9 +28,9 @@ export function MapView({ markets, filterComponent }: MapViewProps) {
       <div className="mb-4">
         <h2 className="text-2xl font-bold mb-1">🗺️ Buscar Mercados</h2>
         <p className="text-sm text-gray-600">Encuentra mercados cercanos</p>
-        {locationError && (
+        {!userLocation && (
           <div className="mt-2 p-2 bg-yellow-50 border-l-4 border-yellow-500 text-yellow-700 text-xs rounded">
-            ℹ️ {locationError}
+            ℹ️ Obteniendo tu ubicación...
           </div>
         )}
       </div>
