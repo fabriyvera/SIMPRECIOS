@@ -7,6 +7,7 @@ import { VendorDashboard } from "@/components/VendorDashboard";
 import { Navbar } from "@/components/Navbar";
 import { MapView } from "@/components/MapView";
 import { AIBasket } from "@/components/AIBasket";
+import { SavedBaskets } from "@/components/SavedBaskets";
 import { ShoppingBag, Store, ArrowLeft } from "lucide-react";
 import { Avatar } from "@/components/ui/avatar";
 import { Button } from "@/components/ui/button";
@@ -438,7 +439,12 @@ export default function HomeClient() {
           <MapView markets={finalMarkets} userLocation={userLocation} />
         )}
 
-        {currentView === "ai" && <AIBasket markets={markets} />}
+        {currentView === "ai" && (
+          <div className="flex flex-col gap-12">
+            <AIBasket markets={markets} />
+            <SavedBaskets markets={markets} />
+          </div>
+        )}
       </div>
     </div>
   );
