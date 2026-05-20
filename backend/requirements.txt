@@ -3,5 +3,7 @@ uvicorn
 supabase
 python-dotenv
 pydantic
-python-jose        ← JWT verification
+pydantic-settings
+python-dotenv
+python-jose  
 httpx

@@ -13,7 +13,7 @@ from datetime import datetime
 
 # ─────────────────────────────────────────────
 # HU-14 │ Calificar la atención
-# Tabla: puesto_ratings
+# Tabla: calificaciones
 # ─────────────────────────────────────────────
 
 class CalificarRequest(BaseModel):
@@ -30,12 +30,12 @@ class CalificarResponse(BaseModel):
 
 # ─────────────────────────────────────────────
 # HU-15 │ Verificar transparencia
-# Tabla: precios_actuales + puesto_ratings (campo confianza)
+# Tabla: stock_vendedora + precios_referenciales
 # ─────────────────────────────────────────────
 
 class VerificarPrecioRequest(BaseModel):
     usuario_id: UUID4
-    producto_id: UUID4
+    producto_id: int
     precio_pagado: float = Field(..., gt=0, description="Precio que el usuario pagó en el puesto")
     es_correcto: bool = Field(..., description="¿El precio pagado coincide con el publicado?")
 
@@ -50,12 +50,12 @@ class VerificarPrecioResponse(BaseModel):
 
 # ─────────────────────────────────────────────
 # HU-16 │ Denunciar sobreprecio
-# Tablas: denuncias, denuncias_guardadas
+# Tablas: denuncias_sobreprecio
 # ─────────────────────────────────────────────
 
 class DenunciarRequest(BaseModel):
     usuario_id: UUID4
-    producto_id: UUID4
+    producto_id: int
     precio_cobrado: float = Field(..., gt=0, description="Precio que le cobraron")
     motivo: str = Field(..., min_length=5, max_length=200, description="Descripción del sobreprecio")
     url_evidencia: Optional[str] = Field(None, description="URL de foto como evidencia (opcional)")
@@ -70,7 +70,7 @@ class DenunciarResponse(BaseModel):
 
 # ─────────────────────────────────────────────
 # HU-17 │ Agendar favoritos
-# Tabla: user_favorites
+# Tabla: puestos_favoritos
 # ─────────────────────────────────────────────
 
 class FavoritoResponse(BaseModel):
