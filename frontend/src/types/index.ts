@@ -27,6 +27,7 @@ export interface Market {
   marketLocation: string;
   color: string;
   vendorId?: string;
+  isFavorite?: boolean;
 }
 
 export interface PriceHistory {
@@ -40,4 +41,21 @@ export interface CurrentUser {
   name: string;
   avatar: string;
   isVendor: boolean;
+}
+
+export interface MarketLocation {
+  id: string;
+  name: string;
+  marketLocation: string;
+  color: string;
+  lat: number;
+  lng: number;
+  address: string;
+  phone: string;
+  hours: string;
+}
+
+export interface UserLocation {
+  lat: number;
+  lng: number;
 }

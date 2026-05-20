@@ -17,12 +17,15 @@ interface SearchAndFilterProps {
   selectedMarketLocation: string;
   onMarketLocationChange: (value: string) => void;
   marketLocations: string[];
+  showFavoritesOnly: boolean;
+  onShowFavoritesOnlyChange: (value: boolean) => void;
 }
 
 export function SearchAndFilter({
   searchTerm, onSearchChange, selectedCategory, onCategoryChange,
   sortBy, onSortChange, categories, showOpenOnly, onShowOpenOnlyChange,
   selectedMarketLocation, onMarketLocationChange, marketLocations,
+  showFavoritesOnly, onShowFavoritesOnlyChange,
 }: SearchAndFilterProps) {
   return (
     <div className="flex flex-col gap-4 mb-6 p-4 bg-white rounded-2xl shadow-md border-2 border-orange-200">
@@ -76,23 +79,39 @@ export function SearchAndFilter({
                 <SelectItem value="name-desc">📝 Nombre Z-A</SelectItem>
                 <SelectItem value="rating">⭐ Calificación Baja-Alta</SelectItem>
                 <SelectItem value="rating-desc">⭐ Calificación Alta-Baja</SelectItem>
+                <SelectItem value="distance">📍 Distancia (Menor a Mayor)</SelectItem>
               </SelectContent>
             </Select>
           </div>
         </div>
       </div>
 
-      <div className="flex items-center gap-2 bg-green-50 rounded-lg px-3 py-2.5 border-2 border-green-200">
-        <input
-          type="checkbox"
-          id="showOpenOnly"
-          checked={showOpenOnly}
-          onChange={(e) => onShowOpenOnlyChange(e.target.checked)}
-          className="w-4 h-4 rounded border-green-400 text-green-600 focus:ring-green-500"
-        />
-        <label htmlFor="showOpenOnly" className="text-sm font-bold cursor-pointer text-green-800 flex items-center gap-2">
-          🟢 Mostrar solo puestos abiertos
-        </label>
+      <div className="flex flex-col sm:flex-row gap-4">
+        <div className="flex items-center gap-2 bg-green-50 rounded-lg px-3 py-2.5 border-2 border-green-200">
+          <input
+            type="checkbox"
+            id="showOpenOnly"
+            checked={showOpenOnly}
+            onChange={(e) => onShowOpenOnlyChange(e.target.checked)}
+            className="w-4 h-4 rounded border-green-400 text-green-600 focus:ring-green-500"
+          />
+          <label htmlFor="showOpenOnly" className="text-sm font-bold cursor-pointer text-green-800 flex items-center gap-2">
+            🟢 Mostrar solo puestos abiertos
+          </label>
+        </div>
+        
+        <div className="flex items-center gap-2 bg-yellow-50 rounded-lg px-3 py-2.5 border-2 border-yellow-200">
+          <input
+            type="checkbox"
+            id="showFavoritesOnly"
+            checked={showFavoritesOnly}
+            onChange={(e) => onShowFavoritesOnlyChange(e.target.checked)}
+            className="w-4 h-4 rounded border-yellow-400 text-yellow-600 focus:ring-yellow-500"
+          />
+          <label htmlFor="showFavoritesOnly" className="text-sm font-bold cursor-pointer text-yellow-800 flex items-center gap-2">
+            ⭐ Mostrar solo favoritos
+          </label>
+        </div>
       </div>
     </div>
   );

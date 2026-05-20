@@ -1,4 +1,4 @@
-import { Market, PriceHistory } from "@/types";
+import { Market, PriceHistory, MarketLocation } from "@/types";
 
 // Precios de referencia establecidos por el mercado
 export const REFERENCE_PRICES: Record<string, number> = {
@@ -26,6 +26,20 @@ export const REFERENCE_PRICES: Record<string, number> = {
   "Carne para parrilla": 48.00, "Medallones": 52.00, "Punta de anca": 46.00,
   "Chorizo criollo": 34.00, "Lomo fino": 60.00, "Carne picada": 36.00,
   "Costillar": 42.00, "Nalga": 44.00,
+};
+
+export const MARKET_LOCATIONS: MarketLocation[] = [
+  { id: "central", name: "Mercado Central", marketLocation: "Mercado Central", color: "#f44336", lat: -16.5000, lng: -68.1500, address: "Av. Ismael Montes, La Paz", phone: "+591 2-2345678", hours: "Lun-Dom: 6:00 AM - 7:00 PM" },
+  { id: "puerto", name: "Mercado del Puerto", marketLocation: "Mercado del Puerto", color: "#2196f3", lat: -16.5100, lng: -68.1400, address: "Zona Puerto, La Paz", phone: "+591 2-2345679", hours: "Mar-Dom: 6:00 AM - 5:00 PM" },
+  { id: "norte", name: "Mercado Norte", marketLocation: "Mercado Norte", color: "#4caf50", lat: -16.4900, lng: -68.1600, address: "Zona Norte, La Paz", phone: "+591 2-2345680", hours: "Lun-Sáb: 7:00 AM - 6:00 PM" },
+];
+
+export const calculateDistance = (lat1: number, lng1: number, lat2: number, lng2: number): string => {
+  const R = 6371;
+  const dLat = (lat2 - lat1) * Math.PI / 180;
+  const dLng = (lng2 - lng1) * Math.PI / 180;
+  const a = Math.sin(dLat / 2) ** 2 + Math.cos(lat1 * Math.PI / 180) * Math.cos(lat2 * Math.PI / 180) * Math.sin(dLng / 2) ** 2;
+  return (R * 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a))).toFixed(1);
 };
 
 export function generatePriceHistory(currentPrice: number): PriceHistory[] {

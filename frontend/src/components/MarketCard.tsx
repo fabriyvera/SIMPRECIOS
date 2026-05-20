@@ -1,5 +1,4 @@
 "use client";
-
 import { useState, useEffect, useMemo } from "react";
 import {
   Star,
@@ -42,6 +41,7 @@ interface MarketCardProps {
   isFavorite?: boolean;
   onToggleFavorite?: (marketId: string) => void;
   onReportOverprice?: (marketId: string, report: OverpriceReport) => void;
+  distance?: string;
 }
 
 export function MarketCard({
@@ -52,8 +52,9 @@ export function MarketCard({
   averagePrices,
   referencePrices,
   isFavorite = false,
-  onToggleFavorite,
   onReportOverprice,
+  onToggleFavorite,
+  distance
 }: MarketCardProps) {
   // Estados generales
   const [showProducts, setShowProducts] = useState(false);
@@ -148,43 +149,52 @@ export function MarketCard({
 
   return (
     <Card
-      className="overflow-hidden hover:shadow-xl transition-all duration-300 border-2 hover:scale-[1.02]"
-      style={{ borderColor: market.color }}
+      className={`overflow-hidden hover:shadow-xl transition-all duration-300 border-2 hover:scale-[1.02] ${
+        favorite ? 'ring-4 ring-yellow-400 shadow-yellow-200 shadow-lg' : ''
+      }`}
+      style={{ borderColor: favorite ? '#facc15' : market.color }}
     >
-      {/* Imagen y badges */}
+      {/* ========== SECCIÓN DE IMAGEN Y BADGES ========== */}
       <div className="relative h-48 overflow-hidden">
         <img src={market.image} alt={market.name} className="w-full h-full object-cover" />
         <div className="absolute inset-0 bg-gradient-to-t from-black/60 via-black/20 to-transparent" />
 
         <Badge
           className="absolute top-3 right-3 text-white font-bold shadow-lg"
-          style={{ backgroundColor: market.isOpen ? "#4caf50" : "#f44336" }}
+          style={{ backgroundColor: market.isOpen ? '#4caf50' : '#f44336' }}
         >
-          {market.isOpen ? "🟢 ABIERTO" : "🔴 CERRADO"}
+          {market.isOpen ? '🟢 ABIERTO' : '🔴 CERRADO'}
         </Badge>
 
-        <div className="absolute bottom-3 left-3 flex items-center gap-2 bg-white/95 rounded-full px-3 py-1.5 shadow-lg">
-          <MapPin className="w-3.5 h-3.5 text-orange-600" />
-          <span className="text-xs font-medium text-gray-700">{market.marketLocation}</span>
+        <div className="absolute bottom-3 left-3 flex items-center gap-2">
+          <div className="flex items-center gap-2 bg-white/95 rounded-full px-3 py-1.5 shadow-lg">
+            <MapPin className="w-3.5 h-3.5 text-orange-600" />
+            <span className="text-xs font-medium text-gray-700">{market.marketLocation}</span>
+          </div>
+          {distance && (
+            <div className="flex items-center gap-1 bg-blue-100 text-blue-800 rounded-full px-3 py-1.5 shadow-lg font-bold border border-blue-200">
+              <span className="text-xs">📍 A {distance} km de ti</span>
+            </div>
+          )}
         </div>
 
         <button
           onClick={handleToggleFavorite}
-          title={favorite ? "Quitar de favoritos" : "Guardar en favoritos"}
-          className="absolute top-3 left-3 p-2 rounded-full bg-white/90 shadow-md hover:scale-110 transition-transform"
+          title={favorite ? 'Quitar de favoritos' : 'Guardar en favoritos'}
+          className="absolute top-3 left-3 p-2 rounded-full bg-white/90 shadow-md hover:scale-110 transition-transform z-10"
         >
           <Heart
             className="w-5 h-5 transition-colors"
             style={{
-              fill: favorite ? "#e53935" : "transparent",
-              color: favorite ? "#e53935" : "#9e9e9e",
+              fill: favorite ? '#e53935' : 'transparent',
+              color: favorite ? '#e53935' : '#9e9e9e',
             }}
           />
         </button>
       </div>
 
-      {/* Header */}
-      <CardHeader className="pb-3" style={{ borderLeftWidth: "4px", borderLeftColor: market.color }}>
+      {/* ========== HEADER ========== */}
+      <CardHeader className="pb-3" style={{ borderLeftWidth: '4px', borderLeftColor: market.color }}>
         <div className="flex items-start justify-between gap-2">
           <div className="flex-1">
             <h3 className="font-bold mb-1 text-lg" style={{ color: market.color }}>
@@ -199,7 +209,9 @@ export function MarketCard({
               <Star className="w-5 h-5 fill-yellow-400 text-yellow-400" />
               <span className="font-bold text-lg">{market.rating.toFixed(1)}</span>
             </div>
-            <span className="text-xs text-muted-foreground">({market.reviews.length} reseñas)</span>
+            <span className="text-xs text-muted-foreground">
+              ({market.reviews.length} reseñas)
+            </span>
 
             {transparencyScore !== null && (
               <div
@@ -214,6 +226,7 @@ export function MarketCard({
         </div>
       </CardHeader>
 
+      {/* ========== CONTENIDO ========== */}
       <CardContent className="space-y-3 pb-3">
         <p className="text-sm leading-relaxed">{market.description}</p>
 
@@ -227,7 +240,7 @@ export function MarketCard({
           <Button
             variant="ghost"
             className="w-full flex items-center justify-between p-3 h-auto rounded-xl"
-            style={{ backgroundColor: showProducts ? `${market.color}15` : "transparent" }}
+            style={{ backgroundColor: showProducts ? `${market.color}15` : 'transparent' }}
             onClick={() => setShowProducts(!showProducts)}
           >
             <span className="text-sm font-bold" style={{ color: market.color }}>
@@ -240,7 +253,10 @@ export function MarketCard({
             <div className="space-y-2 pt-1">
               {availableProducts.map((product) => (
                 <div key={product.id} className="space-y-2">
-                  <div className="flex items-center justify-between p-3 rounded-lg border-l-4 bg-white shadow-sm" style={{ borderLeftColor: market.color }}>
+                  <div
+                    className="flex items-center justify-between p-3 rounded-lg border-l-4 bg-white shadow-sm"
+                    style={{ borderLeftColor: market.color }}
+                  >
                     <span className="text-sm font-medium flex-1">{product.name}</span>
                     <div className="flex items-center gap-2">
                       <span
@@ -255,7 +271,9 @@ export function MarketCard({
                         variant="ghost"
                         className="h-8 px-2"
                         onClick={() =>
-                          setSelectedProductForHistory(selectedProductForHistory === product.id ? null : product.id)
+                          setSelectedProductForHistory(
+                            selectedProductForHistory === product.id ? null : product.id
+                          )
                         }
                       >
                         <TrendingUp className="w-4 h-4" />
@@ -265,7 +283,10 @@ export function MarketCard({
                         variant="ghost"
                         className="h-8 px-2"
                         onClick={() => {
-                          setSelectedProductForComparison({ name: product.name, price: product.price });
+                          setSelectedProductForComparison({
+                            name: product.name,
+                            price: product.price,
+                          });
                           setShowComparisonModal(true);
                         }}
                       >
@@ -276,7 +297,10 @@ export function MarketCard({
                         variant="ghost"
                         className="h-8 px-2"
                         onClick={() => {
-                          setSelectedProductForComparison({ name: product.name, price: product.price });
+                          setSelectedProductForComparison({
+                            name: product.name,
+                            price: product.price,
+                          });
                           setShowValidatorModal(true);
                         }}
                       >
@@ -288,31 +312,47 @@ export function MarketCard({
                   {selectedProductForHistory === product.id && priceHistory?.[product.name] && (
                     <div className="bg-gray-50 rounded-lg p-4 border">
                       <h5 className="font-bold mb-3 flex items-center gap-2 text-sm">
-                        <TrendingUp className="w-4 h-4" style={{ color: market.color }} /> Tendencia - {product.name}
+                        <TrendingUp className="w-4 h-4" style={{ color: market.color }} /> Tendencia -{' '}
+                        {product.name}
                       </h5>
                       <ResponsiveContainer width="100%" height={200}>
                         <LineChart data={priceHistory[product.name]}>
                           <CartesianGrid strokeDasharray="3 3" />
-                          <XAxis dataKey="date" tick={{ fontSize: 10 }} angle={-45} textAnchor="end" height={50} />
+                          <XAxis
+                            dataKey="date"
+                            tick={{ fontSize: 10 }}
+                            angle={-45}
+                            textAnchor="end"
+                            height={50}
+                          />
                           <YAxis tick={{ fontSize: 10 }} />
                           <Tooltip
-                            formatter={(value: any) => [`Bs. ${Number(value).toFixed(2)}`, "Precio"]}
-                            labelStyle={{ fontWeight: "bold", fontSize: "12px" }}
+                            formatter={(value: any) => [`Bs. ${Number(value).toFixed(2)}`, 'Precio']}
+                            labelStyle={{ fontWeight: 'bold', fontSize: '12px' }}
                           />
-                          <Line type="monotone" dataKey="price" stroke={market.color} strokeWidth={2} dot={{ r: 4 }} />
+                          <Line
+                            type="monotone"
+                            dataKey="price"
+                            stroke={market.color}
+                            strokeWidth={2}
+                            dot={{ r: 4 }}
+                          />
                         </LineChart>
                       </ResponsiveContainer>
                       <div className="mt-3 grid grid-cols-3 gap-2 text-center text-[10px]">
                         <div className="bg-white p-2 rounded border">
                           <p className="text-gray-500">Mínimo</p>
                           <p className="font-bold">
-                            Bs. {Math.min(...(priceHistory[product.name]?.map((h) => h.price) || [0])).toFixed(2)}
+                            Bs.{' '}
+                            {Math.min(
+                              ...(priceHistory[product.name]?.map((h) => h.price) || [0])
+                            ).toFixed(2)}
                           </p>
                         </div>
                         <div className="bg-white p-2 rounded border">
                           <p className="text-gray-500">Promedio</p>
                           <p className="font-bold">
-                            Bs.{" "}
+                            Bs.{' '}
                             {(
                               (priceHistory[product.name]?.reduce((a, b) => a + b.price, 0) || 0) /
                               (priceHistory[product.name]?.length || 1)
@@ -322,7 +362,10 @@ export function MarketCard({
                         <div className="bg-white p-2 rounded border">
                           <p className="text-gray-500">Máximo</p>
                           <p className="font-bold">
-                            Bs. {Math.max(...(priceHistory[product.name]?.map((h) => h.price) || [0])).toFixed(2)}
+                            Bs.{' '}
+                            {Math.max(
+                              ...(priceHistory[product.name]?.map((h) => h.price) || [0])
+                            ).toFixed(2)}
                           </p>
                         </div>
                       </div>
@@ -410,7 +453,7 @@ export function MarketCard({
                 className="border-2 border-orange-400 text-orange-600"
                 onClick={() => {
                   setShowReport(false);
-                  setReportForm({ productName: "", reportedPrice: "", comment: "" });
+                  setReportForm({ productName: '', reportedPrice: '', comment: '' });
                 }}
               >
                 Cancelar
@@ -424,7 +467,7 @@ export function MarketCard({
           <Button
             variant="ghost"
             className="w-full flex items-center justify-between p-3 h-auto rounded-xl"
-            style={{ backgroundColor: showReviews ? `${market.color}15` : "transparent" }}
+            style={{ backgroundColor: showReviews ? `${market.color}15` : 'transparent' }}
             onClick={() => setShowReviews(!showReviews)}
           >
             <div className="flex items-center gap-2">
@@ -456,7 +499,9 @@ export function MarketCard({
                       </Avatar>
                       <div>
                         <p className="text-sm font-bold">{review.userName}</p>
-                        <p className="text-xs text-muted-foreground">{review.date || "Reciente"}</p>
+                        <p className="text-xs text-muted-foreground">
+                          {review.date || 'Reciente'}
+                        </p>
                       </div>
                     </div>
                     <div className="flex items-center gap-1 bg-yellow-50 px-2 py-1 rounded-full">
@@ -468,14 +513,16 @@ export function MarketCard({
                 </div>
               ))}
               {market.reviews.length === 0 && (
-                <p className="text-sm text-muted-foreground text-center py-4 italic">Sé el primero en comentar</p>
+                <p className="text-sm text-muted-foreground text-center py-4 italic">
+                  Sé el primero en comentar
+                </p>
               )}
             </div>
           )}
         </div>
       </CardContent>
 
-      {/* Footer con dos botones: Calificar atención y Verificar transparencia */}
+      {/* Footer con dos botones */}
       <CardFooter className="pt-0 pb-4 flex gap-2">
         {!showAddReview ? (
           <>
@@ -511,10 +558,14 @@ export function MarketCard({
               <label className="text-sm font-semibold">Calificación</label>
               <div className="flex gap-2">
                 {[1, 2, 3, 4, 5].map((star) => (
-                  <button key={star} onClick={() => setNewRating(star)} className="hover:scale-125 transition-transform">
+                  <button
+                    key={star}
+                    onClick={() => setNewRating(star)}
+                    className="hover:scale-125 transition-transform"
+                  >
                     <Star
                       className={`w-8 h-8 ${
-                        star <= newRating ? "fill-yellow-400 text-yellow-400" : "text-gray-300"
+                        star <= newRating ? 'fill-yellow-400 text-yellow-400' : 'text-gray-300'
                       }`}
                     />
                   </button>
@@ -522,7 +573,7 @@ export function MarketCard({
               </div>
               {newRating > 0 && (
                 <p className="text-xs text-muted-foreground">
-                  {["", "Muy malo", "Malo", "Regular", "Bueno", "Excelente"][newRating]}
+                  {['', 'Muy malo', 'Malo', 'Regular', 'Bueno', 'Excelente'][newRating]}
                 </p>
               )}
             </div>
@@ -553,7 +604,7 @@ export function MarketCard({
                 onClick={() => {
                   setShowAddReview(false);
                   setNewRating(0);
-                  setNewComment("");
+                  setNewComment('');
                 }}
               >
                 Cancelar
@@ -563,7 +614,7 @@ export function MarketCard({
         )}
       </CardFooter>
 
-      {/* Modales */}
+      {/* Modales de comparación y validador */}
       {selectedProductForComparison && (
         <>
           <PriceComparison

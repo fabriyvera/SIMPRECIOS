@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useMemo } from "react";
+import { useState, useMemo, useEffect } from "react";
 import { SearchAndFilter } from "@/components/SearchAndFilter";
 import { MarketGrid } from "@/components/MarketGrid";
 import { VendorDashboard } from "@/components/VendorDashboard";
@@ -10,8 +10,12 @@ import { AIBasket } from "@/components/AIBasket";
 import { ShoppingBag, Store, ArrowLeft } from "lucide-react";
 import { Avatar } from "@/components/ui/avatar";
 import { Button } from "@/components/ui/button";
-import { INITIAL_MARKETS, REFERENCE_PRICES, generatePriceHistory } from "@/lib/data";
-import { Market, AppView, PriceHistory } from "@/types";
+import {
+  INITIAL_MARKETS,
+  REFERENCE_PRICES,
+  generatePriceHistory,
+} from "@/lib/data";
+import { Market, AppView, PriceHistory, UserLocation } from "@/types";
 import { LoginView } from "@/components/LoginView";
 import { RegisterView } from "@/components/RegisterView";
 import { RecoverView } from "@/components/RecoverView";
@@ -31,9 +35,25 @@ export default function HomeClient() {
   const [markets, setMarkets] = useState<Market[]>(INITIAL_MARKETS);
   const [searchTerm, setSearchTerm] = useState("");
   const [selectedCategory, setSelectedCategory] = useState("all");
+  const [selectedMarketLocation, setSelectedMarketLocation] = useState("all");
+  const [showFavoritesOnly, setShowFavoritesOnly] = useState(false);
   const [sortBy, setSortBy] = useState("name");
   const [showOpenOnly, setShowOpenOnly] = useState(false);
-  const [selectedMarketLocation, setSelectedMarketLocation] = useState("all");
+  const [userLocation, setUserLocation] = useState<UserLocation | null>(null);
+
+  // Geolocalización
+  useEffect(() => {
+    if (!("geolocation" in navigator)) return;
+    navigator.geolocation.getCurrentPosition(
+      (pos) =>
+        setUserLocation({
+          lat: pos.coords.latitude,
+          lng: pos.coords.longitude,
+        }),
+      () => setUserLocation({ lat: -16.5, lng: -68.15 }), // default La Paz
+      { enableHighAccuracy: false, timeout: 5000, maximumAge: 0 }
+    );
+  }, []);
 
   // Favoritos (persistencia local)
   const [favoriteMarketIds, setFavoriteMarketIds] = useState<string[]>(() => {
@@ -118,12 +138,15 @@ export default function HomeClient() {
         const updatedReviews = [...market.reviews, newReview];
         const newRating =
           updatedReviews.reduce((acc, r) => acc + r.rating, 0) / updatedReviews.length;
-        return { ...market, reviews: updatedReviews, rating: Number(newRating.toFixed(1)) };
+        return {
+          ...market,
+          reviews: updatedReviews,
+          rating: Number(newRating.toFixed(1)),
+        };
       })
     );
   };
 
-  // Favoritos
   const handleToggleFavorite = (marketId: string) => {
     setFavoriteMarketIds((prev) => {
       const next = prev.includes(marketId)
@@ -134,12 +157,15 @@ export default function HomeClient() {
     });
   };
 
-  // Denuncias
   const handleReportOverprice = (
     marketId: string,
     report: { productName: string; reportedPrice: string; comment: string }
   ) => {
-    const newReport = { marketId, ...report, timestamp: new Date().toISOString() };
+    const newReport = {
+      marketId,
+      ...report,
+      timestamp: new Date().toISOString(),
+    };
     setOverpriceReports((prev) => [...prev, newReport]);
     console.log("Denuncia registrada:", newReport);
   };
@@ -182,31 +208,46 @@ export default function HomeClient() {
     [markets]
   );
 
-  const filteredAndSortedMarkets = useMemo(() => {
-    let filtered = markets.filter((market) => {
+  // Mercados filtrados y ordenados (con distancia implícita, el ordenamiento por distancia se hará en MarketGrid)
+  const finalMarkets = useMemo(() => {
+    let filtered = markets.filter((m) => {
       const matchesSearch =
-        market.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
-        market.description.toLowerCase().includes(searchTerm.toLowerCase());
-      const matchesCategory =
-        selectedCategory === "all" || market.category === selectedCategory;
-      const matchesOpenStatus = !showOpenOnly || market.isOpen;
-      const matchesLocation =
-        selectedMarketLocation === "all" || market.marketLocation === selectedMarketLocation;
-      return matchesSearch && matchesCategory && matchesOpenStatus && matchesLocation;
+        m.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
+        m.description.toLowerCase().includes(searchTerm.toLowerCase());
+      const matchesCat = selectedCategory === "all" || m.category === selectedCategory;
+      const matchesLoc =
+        selectedMarketLocation === "all" || m.marketLocation === selectedMarketLocation;
+      const matchesOpen = !showOpenOnly || m.isOpen;
+      const matchesFav = !showFavoritesOnly || favoriteMarketIds.includes(m.id);
+      return matchesSearch && matchesCat && matchesLoc && matchesOpen && matchesFav;
     });
 
+    // Ordenamiento simple (para nombre y rating, la distancia se ordena en MarketGrid)
     filtered.sort((a, b) => {
       switch (sortBy) {
-        case "name": return a.name.localeCompare(b.name);
-        case "name-desc": return b.name.localeCompare(a.name);
-        case "rating": return a.rating - b.rating;
-        case "rating-desc": return b.rating - a.rating;
-        default: return 0;
+        case "name":
+          return a.name.localeCompare(b.name);
+        case "name-desc":
+          return b.name.localeCompare(a.name);
+        case "rating":
+          return a.rating - b.rating;
+        case "rating-desc":
+          return b.rating - a.rating;
+        default:
+          return 0;
       }
     });
-
     return filtered;
-  }, [markets, searchTerm, selectedCategory, sortBy, showOpenOnly, selectedMarketLocation]);
+  }, [
+    markets,
+    searchTerm,
+    selectedCategory,
+    selectedMarketLocation,
+    showOpenOnly,
+    showFavoritesOnly,
+    favoriteMarketIds,
+    sortBy,
+  ]);
 
   // ========== VISTAS DE AUTENTICACIÓN ==========
   if (currentView === "login") return <LoginView onViewChange={handleViewChange} />;
@@ -345,49 +386,60 @@ export default function HomeClient() {
         onToggleVendorMode={handleToggleVendorMode}
       />
 
-      {currentView === "map" && <MapView markets={markets} />}
+      <div className="container mx-auto px-4 py-6">
+        {currentView === "home" && (
+          <>
+            <SearchAndFilter
+              searchTerm={searchTerm}
+              onSearchChange={setSearchTerm}
+              selectedCategory={selectedCategory}
+              onCategoryChange={setSelectedCategory}
+              selectedMarketLocation={selectedMarketLocation}
+              onMarketLocationChange={setSelectedMarketLocation}
+              categories={categories}
+              marketLocations={marketLocations}
+              sortBy={sortBy}
+              onSortChange={setSortBy}
+              showOpenOnly={showOpenOnly}
+              onShowOpenOnlyChange={setShowOpenOnly}
+              showFavoritesOnly={showFavoritesOnly}
+              onShowFavoritesOnlyChange={setShowFavoritesOnly}
+            />
 
-      {currentView === "ai" && <AIBasket markets={markets} />}
+            <div className="mb-4 bg-white rounded-xl p-3 shadow-sm border-l-4 border-orange-500">
+              <p className="text-sm font-bold text-gray-700">
+                📊 {finalMarkets.length} de {markets.length} puestos
+                {selectedMarketLocation !== "all" && (
+                  <span className="ml-2 text-orange-600">en {selectedMarketLocation}</span>
+                )}
+                {showFavoritesOnly && (
+                  <span className="ml-2 text-orange-600">(solo favoritos)</span>
+                )}
+              </p>
+            </div>
 
-      {currentView === "home" && (
-        <div className="px-4 py-4">
-          <SearchAndFilter
-            searchTerm={searchTerm}
-            onSearchChange={setSearchTerm}
-            selectedCategory={selectedCategory}
-            onCategoryChange={setSelectedCategory}
-            sortBy={sortBy}
-            onSortChange={setSortBy}
-            categories={categories}
-            showOpenOnly={showOpenOnly}
-            onShowOpenOnlyChange={setShowOpenOnly}
-            selectedMarketLocation={selectedMarketLocation}
-            onMarketLocationChange={setSelectedMarketLocation}
-            marketLocations={marketLocations}
-          />
+            <MarketGrid
+              markets={finalMarkets}
+              onAddReview={handleAddReview}
+              allMarkets={markets}
+              priceHistory={priceHistory}
+              averagePrices={averagePrices}
+              referencePrices={REFERENCE_PRICES}
+              favoriteMarketIds={favoriteMarketIds}
+              onToggleFavorite={handleToggleFavorite}
+              onReportOverprice={handleReportOverprice}
+              userLocation={userLocation}
+              sortBy={sortBy}
+            />
+          </>
+        )}
 
-          <div className="mb-4 bg-white rounded-xl p-3 shadow-sm border-l-4 border-orange-500">
-            <p className="text-sm font-bold text-gray-700">
-              📊 {filteredAndSortedMarkets.length} de {markets.length} puestos
-              {selectedMarketLocation !== "all" && (
-                <span className="ml-2 text-orange-600">en {selectedMarketLocation}</span>
-              )}
-            </p>
-          </div>
+        {currentView === "map" && (
+          <MapView markets={finalMarkets} userLocation={userLocation} />
+        )}
 
-          <MarketGrid
-            markets={filteredAndSortedMarkets}
-            onAddReview={handleAddReview}
-            allMarkets={markets}
-            priceHistory={priceHistory}
-            averagePrices={averagePrices}
-            referencePrices={REFERENCE_PRICES}
-            favoriteMarketIds={favoriteMarketIds}
-            onToggleFavorite={handleToggleFavorite}
-            onReportOverprice={handleReportOverprice}
-          />
-        </div>
-      )}
+        {currentView === "ai" && <AIBasket markets={markets} />}
+      </div>
     </div>
   );
 }
