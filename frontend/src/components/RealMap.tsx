@@ -112,6 +112,7 @@ export default function RealMap({ locations, userLocation, onSelectMarket }: Rea
               key={loc.id} 
               position={[loc.lat, loc.lng]} 
               icon={customIcon}
+              // @ts-ignore
               eventHandlers={{
                 click: () => {
                   if (!isGray) onSelectMarket(loc.id);

@@ -6,6 +6,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Market } from "@/types";
+import { createClient } from "@/utils/supabase/client";
 
 interface AIBasketProps {
   markets: Market[];
@@ -128,12 +129,29 @@ export function AIBasket({ markets }: AIBasketProps) {
   const handleSaveBasket = async () => {
     setIsSaving(true);
     try {
-      // Simulación de la latencia de base de datos (1 segundo)
-      await new Promise(resolve => setTimeout(resolve, 1000));
-      alert("¡Canasta guardada exitosamente en tu perfil!");
+      const supabase = createClient();
+
+      // Pegas el ID largo que copiaste de Supabase justo aquí:
+      const usuarioIdPrueba = "0511f871-0c1c-47b1-bb77-49717568807e"; // <--- Tu ID real sin los "..."
+
+      const { data, error } = await supabase
+        .from('canastas_favoritas')
+        .insert([
+          {
+            usuario_id: usuarioIdPrueba,
+            nombre_canasta: `Canasta IA (${generatedBasket?.membersServed} pers.)`,
+            cantidad_familiares: generatedBasket?.membersServed,
+            presupuesto_semanal_bs: generatedBasket?.weeklyBudget,
+            items: generatedBasket?.items
+          }
+        ]);
+
+      if (error) throw error;
+
+      alert("¡Éxito! La canasta se guardó en tu base de datos Supabase.");
     } catch (error) {
-      console.error(error);
-      alert("Error al guardar la canasta");
+      console.error("Error al guardar en Supabase:", error);
+      alert("Error al guardar. Revisa la consola de tu navegador.");
     } finally {
       setIsSaving(false);
     }
