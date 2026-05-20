@@ -418,6 +418,7 @@ export default function HomeClient() {
                 )}
               </p>
             </div>
+            
 
             <MarketGrid
               markets={finalMarkets}
