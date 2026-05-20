@@ -99,6 +99,7 @@ export function StockManagement({
                     id={`stock-${product.id}`}
                     checked={product.available}
                     onCheckedChange={() => onToggleStock(product.id)}
+                    className="data-[state=checked]:bg-black data-[state=unchecked]:bg-input [&_span]:bg-white"
                   />
                 </div>
 
