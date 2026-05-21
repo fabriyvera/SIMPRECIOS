@@ -48,23 +48,64 @@ export function VendorDashboard({
     setLocalProducts(market.products);
   }, [market.products]);
 
-  const handleSavePrice = (productId: string, productName: string) => {
+  // ── FUNCIÓN DE ACTUALIZAR PRECIO (ALINEADA CON PYDANTIC) ──
+  const handleSavePrice = async (productId: string, productName: string) => {
     const price = parseFloat(newPrice);
+    
     if (!isNaN(price) && price > 0) {
-      onUpdatePrice(productId, price);
-      
-      // Actualizar localmente de inmediato
-      setLocalProducts(prev => 
-        prev.map(p => p.id === productId ? { ...p, price } : p)
-      );
+      try {
+        // Limpiamos el ID del producto dejando solo los dígitos numéricos reales
+        const idLimpio = productId.replace(/\D/g, ""); 
+        const productoIdFinal = idLimpio ? parseInt(idLimpio, 10) : parseInt(productId, 10);
 
-      setEditingProduct(null);
-      setNewPrice("");
-      
-      toast.success(`✅ Precio de ${productName} actualizado`, {
-        description: `Nuevo precio: Bs. ${price.toFixed(2)}`,
-        duration: 3000,
-      });
+        if (isNaN(productoIdFinal)) {
+          toast.error(`ID de producto inválido para ${productName}`);
+          return;
+        }
+
+        // 🎯 CONSTRUIMOS EL PAYLOAD EXACTO QUE EXIGE TU BACKEND
+        const bodyPayload = {
+          puesto_id: parseInt(market.id, 10),
+          producto_id: productoIdFinal,       
+          precio_actual: price,
+          nombre_producto: productName // 🌟 ¡Aquí está el campo obligatorio que faltaba!
+        };
+
+        const response = await fetch("http://localhost:8000/api/prices/update", {
+          method: "PUT",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify(bodyPayload),
+        });
+
+        if (!response.ok) {
+          const errorData = await response.json().catch(() => ({}));
+          const mensajeError = typeof errorData.detail === 'object' 
+            ? JSON.stringify(errorData.detail) 
+            : errorData.detail;
+            
+          throw new Error(mensajeError || "Error de validación en FastAPI");
+        }
+
+        // Sincronización de estados locales si responde 200 OK
+        onUpdatePrice(productId, price);
+        setLocalProducts(prev => 
+          prev.map(p => p.id === productId ? { ...p, price } : p)
+        );
+        setEditingProduct(null);
+        setNewPrice("");
+        
+        // 🔔 TOAST DE ÉXITO FLOTANTE (Idéntico al de registro)
+        toast.success("✅ Precio actualizado correctamente", {
+          description: `${productName} ahora cuesta Bs. ${price.toFixed(2)}`,
+          duration: 4000,
+        });
+
+      } catch (e: any) {
+        console.error("🚨 Detalle completo del error del backend:", e.message);
+        toast.error("🚨 Error al guardar en el servidor");
+      }
+    } else {
+      toast.error("Por favor, ingresa un precio válido");
     }
   };
 
@@ -95,26 +136,127 @@ export function VendorDashboard({
     });
   };
 
-  const calculatePriceAlert = (currentPrice: number, productName: string) => {
-    const refPrice = referencePrices[productName] || currentPrice;
-    const difference = ((currentPrice - refPrice) / refPrice) * 100;
-    return {
-      isOverpriced: difference > 10,
-      difference: difference.toFixed(1)
-    };
+  // ── SISTEMA DE ALERTAS UNIFICADO Y CORREGIDO ──
+  // ── IDENTIFICACIÓN DIRECTA POR NOMBRE ──
+ const calculatePriceAlert = (product: any) => {
+  const currentPrice = product.price;
+  const nameLimpio = product.name.toLowerCase().trim();
+  
+  // Lista de precios referenciales oficiales de la Alcaldía (Bs.)
+  let refPrice = currentPrice; 
+
+  // ── CATEGORÍA: AVES (POLLO) ─────────────────────────────────────────
+  if (nameLimpio.includes("pollo entero") || nameLimpio.includes("pollo kilo")) {
+    refPrice = 16.50; 
+  } else if (nameLimpio.includes("pechuga de pollo") || nameLimpio.includes("pechuga")) {
+    refPrice = 26.00;
+  } else if (nameLimpio.includes("pierna de pollo") || nameLimpio.includes("pierna") || nameLimpio.includes("muslo")) {
+    refPrice = 19.00;
+  } else if (nameLimpio.includes("alitas de pollo") || nameLimpio.includes("alitas")) {
+    refPrice = 17.00;
+
+  // ── CATEGORÍA: CARNES DE RES ────────────────────────────────────────
+  } else if (nameLimpio.includes("carne molida") || nameLimpio.includes("molida")) {
+    refPrice = 28.00;
+  } else if (nameLimpio.includes("pulpa de res") || nameLimpio.includes("pulpa")) {
+    refPrice = 42.00;
+  } else if (nameLimpio.includes("chuleta de res") || nameLimpio.includes("chuleta")) {
+    refPrice = 32.00;
+  } else if (nameLimpio.includes("costilla de res") || nameLimpio.includes("costilla")) {
+    refPrice = 26.00;
+  } else if (nameLimpio.includes("lomo de res") || nameLimpio.includes("lomo")) {
+    refPrice = 45.00;
+
+  // ── CATEGORÍA: CARNE DE CERDO ───────────────────────────────────────
+  } else if (nameLimpio.includes("chuleta de cerdo") || nameLimpio.includes("cerdo chuleta")) {
+    refPrice = 28.00;
+  } else if (nameLimpio.includes("costilla de cerdo") || nameLimpio.includes("lechón") || nameLimpio.includes("lechon")) {
+    refPrice = 30.00;
+  } else if (nameLimpio.includes("pierna de cerdo")) {
+    refPrice = 25.00;
+
+  // ── CATEGORÍA: PESCADOS ─────────────────────────────────────────────
+  } else if (nameLimpio.includes("trucha")) {
+    refPrice = 35.00; 
+  } else if (nameLimpio.includes("sábalo") || nameLimpio.includes("sabalo")) {
+    refPrice = 25.00; 
+  } else if (nameLimpio.includes("pejerrey")) {
+    refPrice = 40.00;
+
+  // ── CATEGORÍA: VERDURAS Y TUBÉRCULOS ────────────────────────────────
+  } else if (nameLimpio.includes("apio")) {
+    refPrice = 3.50;
+  } else if (nameLimpio.includes("choclo")) {
+    refPrice = 5.00;
+  } else if (nameLimpio.includes("tomate")) {
+    refPrice = 6.00;
+  } else if (nameLimpio.includes("zanahoria")) {
+    refPrice = 4.00;
+  } else if (nameLimpio.includes("cebolla")) {
+    refPrice = 5.00;
+  } else if (nameLimpio.includes("papa")) {
+    refPrice = 45.00; 
+  } else if (nameLimpio.includes("lechuga")) {
+    refPrice = 3.00;
+  } else if (nameLimpio.includes("morron") || nameLimpio.includes("pimenton") || nameLimpio.includes("pimentón")) {
+    refPrice = 2.50;
+  } else if (nameLimpio.includes("arveja")) {
+    refPrice = 7.00;
+  } else if (nameLimpio.includes("espinaca")) {
+    refPrice = 3.50;
+  } else if (nameLimpio.includes("vainita")) {
+    refPrice = 5.00;
+  } else if (nameLimpio.includes("brocoli") || nameLimpio.includes("brócoli")) {
+    refPrice = 7.50;
+  } else if (nameLimpio.includes("locoto")) {
+    refPrice = 6.00;
+  } else if (nameLimpio.includes("camote")) {
+    refPrice = 5.00;
+  } else if (nameLimpio.includes("yuca")) {
+    refPrice = 6.00;
+  } else if (nameLimpio.includes("Chuño")) {
+    refPrice = 46.00;
+
+  // ── CATEGORÍA: FRUTAS ───────────────────────────────────────────────
+  } else if (nameLimpio.includes("platano") || nameLimpio.includes("plátano") || nameLimpio.includes("banano")) {
+    refPrice = 4.00; // Por unidad o promedio por unidad en amarro
+  } else if (nameLimpio.includes("manzana")) {
+    refPrice = 2.00; // Por unidad
+  } else if (nameLimpio.includes("naranja")) {
+    refPrice = 0.80; // Promedio por unidad en 25 de naranjas
+  } else if (nameLimpio.includes("mandarina")) {
+    refPrice = 0.70; 
+  } else if (nameLimpio.includes("papaya")) {
+    refPrice = 8.00; // Por unidad mediana
+  } else if (nameLimpio.includes("frutilla")) {
+    refPrice = 15.00; // Por kilo o cuarta
+  } else if (nameLimpio.includes("piña") || nameLimpio.includes("pina")) {
+    refPrice = 10.00; // Por unidad
+  } else if (nameLimpio.includes("palta")) {
+    refPrice = 5.00; // Por unidad mediana
+  }
+
+  // Cálculo de la desviación porcentual
+  const difference = refPrice > 0 ? ((currentPrice - refPrice) / refPrice) * 100 : 0;
+  
+  return {
+    isOverpriced: difference > 10, 
+    difference: difference.toFixed(1),
+    refPriceFinal: refPrice
   };
+};
 
   const getLowStockProducts = () => localProducts.filter(p => !p.available);
 
   const overpricedProducts = localProducts
     .map(product => {
-      const alert = calculatePriceAlert(product.price, product.name);
+      const alert = calculatePriceAlert(product);
       if (alert.isOverpriced) {
         return {
           id: product.id,
           name: product.name,
           currentPrice: product.price,
-          referencePrice: referencePrices[product.name] || product.price,
+          referencePrice: alert.refPriceFinal,
           difference: parseFloat(alert.difference)
         };
       }
@@ -176,9 +318,10 @@ export function VendorDashboard({
         </h3>
         <div className="space-y-3">
           {localProducts.map(product => {
-            const alert = calculatePriceAlert(product.price, product.name);
+            // Pasamos el producto completo para evaluar su refPrice de la BD
+            const alert = calculatePriceAlert(product);
             const isEditing = editingProduct === product.id;
-            const refPrice = referencePrices[product.name] || product.price;
+            const refPrice = alert.refPriceFinal;
 
             return (
               <div

@@ -207,10 +207,10 @@ export function MarketCard({
           <div className="flex flex-col items-end gap-1">
             <div className="flex items-center gap-1 bg-yellow-50 px-2 py-1 rounded-lg">
               <Star className="w-5 h-5 fill-yellow-400 text-yellow-400" />
-              <span className="font-bold text-lg">{market.rating.toFixed(1)}</span>
+              <span className="font-bold text-lg">{(market.rating ?? 0).toFixed(1)}</span>
             </div>
             <span className="text-xs text-muted-foreground">
-              ({market.reviews.length} reseñas)
+              ({market.reviews?.length || 0} reseñas)
             </span>
 
             {transparencyScore !== null && (
@@ -473,7 +473,7 @@ export function MarketCard({
             <div className="flex items-center gap-2">
               <MessageSquare className="w-4 h-4" style={{ color: market.color }} />
               <span className="text-sm font-bold" style={{ color: market.color }}>
-                Comentarios ({market.reviews.length})
+                Comentarios ({market.reviews?.length || 0})
               </span>
             </div>
             {showReviews ? <ChevronUp className="w-5 h-5" /> : <ChevronDown className="w-5 h-5" />}
