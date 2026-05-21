@@ -16,6 +16,8 @@ interface MarketGridProps {
   onReportOverprice: (marketId: string, report: any) => void;
   userLocation: UserLocation | null;
   sortBy: string;
+  userId?: string;
+  userRole?: 'Vendedora' | 'Comprador';
 }
 
 export function MarketGrid({
@@ -30,6 +32,8 @@ export function MarketGrid({
   onReportOverprice,
   userLocation,
   sortBy,
+  userId,
+  userRole = 'Comprador',
 }: MarketGridProps) {
   if (markets.length === 0) {
     return (
@@ -101,6 +105,8 @@ export function MarketGrid({
           isFavorite={favoriteMarketIds.includes(market.id)}
           onToggleFavorite={onToggleFavorite}
           onReportOverprice={onReportOverprice}
+          userId={userId}
+          userRole={userRole}
         />
       ))}
     </div>

@@ -16,12 +16,14 @@ import {
   REFERENCE_PRICES,
   generatePriceHistory,
 } from "@/lib/data";
-import { Market, AppView, PriceHistory, UserLocation } from "@/types";
+import { Market, AppView, PriceHistory, UserLocation, SessionUser } from "@/types";
 import { LoginView } from "@/components/LoginView";
 import { RegisterView } from "@/components/RegisterView";
 import { RecoverView } from "@/components/RecoverView";
 import { VerifyView } from "@/components/VerifyView";
 import { ProfileView } from "@/components/ProfileView";
+import { ToastProvider } from "@/components/Toast";
+import { createClient } from "@/utils/supabase/client";
 
 export default function HomeClient() {
   const [currentUser] = useState({
@@ -29,6 +31,31 @@ export default function HomeClient() {
     avatar: "JP",
     isVendor: true,
   });
+
+  const [sessionUser, setSessionUser] = useState<SessionUser | null>(null);
+  const [userRole, setUserRole] = useState<'Vendedora' | 'Comprador'>('Comprador');
+
+  // Obtener usuario autenticado
+  useEffect(() => {
+    const getAuthUser = async () => {
+      try {
+        const supabase = createClient();
+        const { data: { session } } = await supabase.auth.getSession();
+        if (session?.user) {
+          setSessionUser({
+            id: session.user.id,
+            email: session.user.email || '',
+            user_metadata: session.user.user_metadata,
+          });
+          // TODO: Obtener el rol del usuario de la BD (profiles table)
+          setUserRole('Comprador');
+        }
+      } catch (error) {
+        console.error('Error obteniendo usuario:', error);
+      }
+    };
+    getAuthUser();
+  }, []);
 
   const [currentView, setCurrentView] = useState<AppView>("home");
   const [isVendorMode, setIsVendorMode] = useState(false);
@@ -378,75 +405,79 @@ export default function HomeClient() {
 
   // ========== VISTA COMPRADOR (HOME, MAPA, AI) ==========
   return (
-    <div className="min-h-screen bg-background pb-20">
-      <Navbar
-        currentView={currentView}
-        onViewChange={handleViewChange}
-        currentUser={currentUser}
-        isVendorMode={isVendorMode}
-        onToggleVendorMode={handleToggleVendorMode}
-      />
+    <ToastProvider>
+      <div className="min-h-screen bg-background pb-20">
+        <Navbar
+          currentView={currentView}
+          onViewChange={handleViewChange}
+          currentUser={currentUser}
+          isVendorMode={isVendorMode}
+          onToggleVendorMode={handleToggleVendorMode}
+        />
 
-      <div className="container mx-auto px-4 py-6">
-        {currentView === "home" && (
-          <>
-            <SearchAndFilter
-              searchTerm={searchTerm}
-              onSearchChange={setSearchTerm}
-              selectedCategory={selectedCategory}
-              onCategoryChange={setSelectedCategory}
-              selectedMarketLocation={selectedMarketLocation}
-              onMarketLocationChange={setSelectedMarketLocation}
-              categories={categories}
-              marketLocations={marketLocations}
-              sortBy={sortBy}
-              onSortChange={setSortBy}
-              showOpenOnly={showOpenOnly}
-              onShowOpenOnlyChange={setShowOpenOnly}
-              showFavoritesOnly={showFavoritesOnly}
-              onShowFavoritesOnlyChange={setShowFavoritesOnly}
-            />
+        <div className="container mx-auto px-4 py-6">
+          {currentView === "home" && (
+            <>
+              <SearchAndFilter
+                searchTerm={searchTerm}
+                onSearchChange={setSearchTerm}
+                selectedCategory={selectedCategory}
+                onCategoryChange={setSelectedCategory}
+                selectedMarketLocation={selectedMarketLocation}
+                onMarketLocationChange={setSelectedMarketLocation}
+                categories={categories}
+                marketLocations={marketLocations}
+                sortBy={sortBy}
+                onSortChange={setSortBy}
+                showOpenOnly={showOpenOnly}
+                onShowOpenOnlyChange={setShowOpenOnly}
+                showFavoritesOnly={showFavoritesOnly}
+                onShowFavoritesOnlyChange={setShowFavoritesOnly}
+              />
 
-            <div className="mb-4 bg-white rounded-xl p-3 shadow-sm border-l-4 border-orange-500">
-              <p className="text-sm font-bold text-gray-700">
-                📊 {finalMarkets.length} de {markets.length} puestos
-                {selectedMarketLocation !== "all" && (
-                  <span className="ml-2 text-orange-600">en {selectedMarketLocation}</span>
-                )}
-                {showFavoritesOnly && (
-                  <span className="ml-2 text-orange-600">(solo favoritos)</span>
-                )}
-              </p>
+              <div className="mb-4 bg-white rounded-xl p-3 shadow-sm border-l-4 border-orange-500">
+                <p className="text-sm font-bold text-gray-700">
+                  {finalMarkets.length} de {markets.length} puestos
+                  {selectedMarketLocation !== "all" && (
+                    <span className="ml-2 text-orange-600">en {selectedMarketLocation}</span>
+                  )}
+                  {showFavoritesOnly && (
+                    <span className="ml-2 text-orange-600">(solo favoritos)</span>
+                  )}
+                </p>
+              </div>
+              
+
+              <MarketGrid
+                markets={finalMarkets}
+                onAddReview={handleAddReview}
+                allMarkets={markets}
+                priceHistory={priceHistory}
+                averagePrices={averagePrices}
+                referencePrices={REFERENCE_PRICES}
+                favoriteMarketIds={favoriteMarketIds}
+                onToggleFavorite={handleToggleFavorite}
+                onReportOverprice={handleReportOverprice}
+                userLocation={userLocation}
+                sortBy={sortBy}
+                userId={sessionUser?.id}
+                userRole={userRole}
+              />
+            </>
+          )}
+
+          {currentView === "map" && (
+            <MapView markets={finalMarkets} userLocation={userLocation} />
+          )}
+
+          {currentView === "ai" && (
+            <div className="flex flex-col gap-12">
+              <AIBasket markets={markets} />
+              <SavedBaskets markets={markets} />
             </div>
-            
-
-            <MarketGrid
-              markets={finalMarkets}
-              onAddReview={handleAddReview}
-              allMarkets={markets}
-              priceHistory={priceHistory}
-              averagePrices={averagePrices}
-              referencePrices={REFERENCE_PRICES}
-              favoriteMarketIds={favoriteMarketIds}
-              onToggleFavorite={handleToggleFavorite}
-              onReportOverprice={handleReportOverprice}
-              userLocation={userLocation}
-              sortBy={sortBy}
-            />
-          </>
-        )}
-
-        {currentView === "map" && (
-          <MapView markets={finalMarkets} userLocation={userLocation} />
-        )}
-
-        {currentView === "ai" && (
-          <div className="flex flex-col gap-12">
-            <AIBasket markets={markets} />
-            <SavedBaskets markets={markets} />
-          </div>
-        )}
+          )}
+        </div>
       </div>
-    </div>
+    </ToastProvider>
   );
 }

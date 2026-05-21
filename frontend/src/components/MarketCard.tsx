@@ -24,6 +24,8 @@ import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContai
 import { PriceComparison } from "./PriceComparison";
 import { PriceValidator } from "./PriceValidator";
 import { Market, PriceHistory } from "@/types";
+import { useCalificar, useDenunciar, useAgregarFavorito, useEliminarFavorito } from "@/hooks/useInteraccion";
+import { useToast } from "./Toast";
 
 interface OverpriceReport {
   productName: string;
@@ -42,6 +44,8 @@ interface MarketCardProps {
   onToggleFavorite?: (marketId: string) => void;
   onReportOverprice?: (marketId: string, report: OverpriceReport) => void;
   distance?: string;
+  userId?: string;
+  userRole?: 'Vendedora' | 'Comprador';
 }
 
 export function MarketCard({
@@ -54,8 +58,12 @@ export function MarketCard({
   isFavorite = false,
   onReportOverprice,
   onToggleFavorite,
-  distance
+  distance,
+  userId,
+  userRole = 'Comprador',
 }: MarketCardProps) {
+  const { addToast } = useToast();
+  
   // Estados generales
   const [showProducts, setShowProducts] = useState(false);
   const [showReviews, setShowReviews] = useState(false);
@@ -82,6 +90,46 @@ export function MarketCard({
     productName: "",
     reportedPrice: "",
     comment: "",
+  });
+
+  // Hooks de interacción
+  const { calificar, loading: loadingCalificar } = useCalificar(market.id, {
+    onSuccess: (msg) => {
+      addToast(msg, 'success');
+      setNewRating(0);
+      setNewComment("");
+      setShowAddReview(false);
+    },
+    onError: (err) => addToast(err, 'error'),
+  });
+
+  const { denunciar, loading: loadingDenunciar } = useDenunciar(market.id, {
+    onSuccess: (msg) => {
+      addToast(msg, 'success');
+      setReportSent(true);
+      setTimeout(() => {
+        setReportSent(false);
+        setShowReport(false);
+        setReportForm({ productName: "", reportedPrice: "", comment: "" });
+      }, 2500);
+    },
+    onError: (err) => addToast(err, 'error'),
+  });
+
+  const { agregarAlFavorito, loading: loadingAgregarFavorito } = useAgregarFavorito(market.id, {
+    onSuccess: (msg) => {
+      setFavorite(true);
+      addToast(msg, 'success');
+    },
+    onError: (err) => addToast(err, 'error'),
+  });
+
+  const { eliminarDelFavorito, loading: loadingEliminarFavorito } = useEliminarFavorito(market.id, {
+    onSuccess: (msg) => {
+      setFavorite(false);
+      addToast(msg, 'success');
+    },
+    onError: (err) => addToast(err, 'error'),
   });
 
   const availableProducts = market.products.filter((p) => p.available);
@@ -113,39 +161,86 @@ export function MarketCard({
       ? "#ff9800"
       : "#f44336";
 
-  const handleToggleFavorite = () => {
-    const next = !favorite;
-    setFavorite(next);
-    onToggleFavorite?.(market.id);
-  };
-
-  const handleSubmitReview = () => {
-    if (newRating > 0 && newComment.trim()) {
-      onAddReview(market.id, newRating, newComment);
-      setNewRating(0);
-      setNewComment("");
-      setShowAddReview(false);
+  const handleToggleFavorite = async () => {
+    if (!userId) {
+      addToast('Por favor inicia sesion para agregar favoritos', 'info');
+      return;
+    }
+    
+    try {
+      if (favorite) {
+        await eliminarDelFavorito(userId);
+      } else {
+        await agregarAlFavorito(userId);
+      }
+    } catch (error) {
+      // Error ya fue manejado en el hook
     }
   };
 
-  const handleSubmitReport = () => {
+  const handleSubmitReview = async () => {
+    if (!userId) {
+      addToast('Por favor inicia sesion para calificar', 'info');
+      return;
+    }
+    
+    if (newRating > 0 && newComment.trim()) {
+      try {
+        await calificar({
+          usuario_id: userId,
+          estrellas: newRating,
+          comentario: newComment,
+        });
+        // También llamar el callback local
+        onAddReview(market.id, newRating, newComment);
+      } catch (error) {
+        // Error ya fue manejado en el hook
+      }
+    }
+  };
+
+  const handleSubmitReport = async () => {
+    if (!userId) {
+      addToast('Por favor inicia sesion para denunciar', 'info');
+      return;
+    }
+    
     if (!reportForm.productName.trim() || !reportForm.reportedPrice.trim()) return;
-    onReportOverprice?.(market.id, reportForm);
-    setReportSent(true);
-    setTimeout(() => {
-      setReportSent(false);
-      setShowReport(false);
-      setReportForm({ productName: "", reportedPrice: "", comment: "" });
-    }, 2500);
+    
+    try {
+      const precio_cobrado = parseFloat(reportForm.reportedPrice);
+      if (isNaN(precio_cobrado)) {
+        addToast('Por favor ingresa un precio válido', 'error');
+        return;
+      }
+
+      // Buscar producto para obtener su ID
+      const producto = availableProducts.find(p => p.name === reportForm.productName);
+      const producto_id = producto ? parseInt(producto.id) : 1;
+
+      await denunciar({
+        usuario_id: userId,
+        producto_id: producto_id,
+        precio_cobrado: precio_cobrado,
+        motivo: reportForm.comment || reportForm.productName,
+      });
+      
+      // También llamar el callback local
+      onReportOverprice?.(market.id, reportForm);
+    } catch (error) {
+      // Error ya fue manejado en el hook
+    }
   };
 
   const handleVerifyTransparency = () => {
     if (transparencyScore !== null) {
-      alert(`🔍 Confiabilidad del puesto: ${transparencyScore}%\nBasado en la consistencia de sus precios respecto al mercado.`);
+      addToast(`Confiabilidad del puesto: ${transparencyScore}%`, 'info');
     } else {
-      alert("No hay suficientes productos para calcular la confiabilidad.");
+      addToast('No hay suficientes productos para calcular la confiabilidad', 'info');
     }
   };
+
+  const isLoadingFavorite = loadingAgregarFavorito || loadingEliminarFavorito;
 
   return (
     <Card
@@ -163,7 +258,7 @@ export function MarketCard({
           className="absolute top-3 right-3 text-white font-bold shadow-lg"
           style={{ backgroundColor: market.isOpen ? '#4caf50' : '#f44336' }}
         >
-          {market.isOpen ? '🟢 ABIERTO' : '🔴 CERRADO'}
+          {market.isOpen ? 'ABIERTO' : 'CERRADO'}
         </Badge>
 
         <div className="absolute bottom-3 left-3 flex items-center gap-2">
@@ -173,15 +268,16 @@ export function MarketCard({
           </div>
           {distance && (
             <div className="flex items-center gap-1 bg-blue-100 text-blue-800 rounded-full px-3 py-1.5 shadow-lg font-bold border border-blue-200">
-              <span className="text-xs">📍 A {distance} km de ti</span>
+              <span className="text-xs">A {distance} km de ti</span>
             </div>
           )}
         </div>
 
         <button
           onClick={handleToggleFavorite}
+          disabled={isLoadingFavorite}
           title={favorite ? 'Quitar de favoritos' : 'Guardar en favoritos'}
-          className="absolute top-3 left-3 p-2 rounded-full bg-white/90 shadow-md hover:scale-110 transition-transform z-10"
+          className="absolute top-3 left-3 p-2 rounded-full bg-white/90 shadow-md hover:scale-110 transition-transform z-10 disabled:opacity-50"
         >
           <Heart
             className="w-5 h-5 transition-colors"
@@ -378,11 +474,12 @@ export function MarketCard({
         </div>
 
         {/* Denuncias */}
-        {!showReport && !reportSent && (
+        {!showReport && !reportSent && userRole === 'Comprador' && (
           <Button
             variant="outline"
-            className="w-full flex items-center justify-center gap-2 rounded-xl border-2 text-sm font-semibold text-orange-600 border-orange-400 hover:bg-orange-50"
+            className="w-full flex items-center justify-center gap-2 rounded-xl border-2 text-sm font-semibold text-orange-600 border-orange-400 hover:bg-orange-50 disabled:opacity-50"
             onClick={() => setShowReport(true)}
+            disabled={loadingDenunciar}
           >
             <AlertTriangle className="w-4 h-4" />
             Denunciar sobreprecio
@@ -443,10 +540,10 @@ export function MarketCard({
             <div className="flex gap-2">
               <Button
                 onClick={handleSubmitReport}
-                disabled={!reportForm.productName.trim() || !reportForm.reportedPrice.trim()}
-                className="flex-1 font-bold text-white bg-orange-500 hover:bg-orange-600"
+                disabled={!reportForm.productName.trim() || !reportForm.reportedPrice.trim() || loadingDenunciar}
+                className="flex-1 font-bold text-white bg-orange-500 hover:bg-orange-600 disabled:opacity-50"
               >
-                Enviar denuncia
+                {loadingDenunciar ? 'Enviando...' : 'Enviar denuncia'}
               </Button>
               <Button
                 variant="outline"
@@ -455,6 +552,7 @@ export function MarketCard({
                   setShowReport(false);
                   setReportForm({ productName: '', reportedPrice: '', comment: '' });
                 }}
+                disabled={loadingDenunciar}
               >
                 Cancelar
               </Button>
@@ -527,17 +625,19 @@ export function MarketCard({
         {!showAddReview ? (
           <>
             <Button
-              className="flex-1 font-bold shadow-md text-white"
+              className="flex-1 font-bold shadow-md text-white disabled:opacity-50"
               style={{ backgroundColor: market.color }}
               onClick={() => setShowAddReview(true)}
+              disabled={loadingCalificar}
             >
-              ⭐ Calificar atención
+              Calificar atención
             </Button>
             <Button
-              className="flex-1 font-bold shadow-md border-2"
+              className="flex-1 font-bold shadow-md border-2 disabled:opacity-50"
               style={{ borderColor: market.color, color: market.color }}
               variant="outline"
               onClick={handleVerifyTransparency}
+              disabled={loadingCalificar}
             >
               <ShieldCheck className="w-4 h-4 mr-1" />
               Verificar transparencia
@@ -562,6 +662,7 @@ export function MarketCard({
                     key={star}
                     onClick={() => setNewRating(star)}
                     className="hover:scale-125 transition-transform"
+                    disabled={loadingCalificar}
                   >
                     <Star
                       className={`w-8 h-8 ${
@@ -578,7 +679,7 @@ export function MarketCard({
               )}
             </div>
             <div className="space-y-1">
-              <label className="text-sm font-semibold">Tu experiencia 💭</label>
+              <label className="text-sm font-semibold">Tu experiencia</label>
               <Textarea
                 placeholder="¿Cómo fue la atención? ¿El trato fue amable? ¿El producto era fresco?..."
                 value={newComment}
@@ -586,16 +687,17 @@ export function MarketCard({
                 rows={3}
                 className="border-2 focus:ring-2"
                 style={{ borderColor: market.color }}
+                disabled={loadingCalificar}
               />
             </div>
             <div className="flex gap-2">
               <Button
                 onClick={handleSubmitReview}
-                disabled={newRating === 0 || !newComment.trim()}
-                className="flex-1 font-bold text-white"
+                disabled={newRating === 0 || !newComment.trim() || loadingCalificar}
+                className="flex-1 font-bold text-white disabled:opacity-50"
                 style={{ backgroundColor: market.color }}
               >
-                Publicar
+                {loadingCalificar ? 'Publicando...' : 'Publicar'}
               </Button>
               <Button
                 variant="outline"
@@ -606,6 +708,7 @@ export function MarketCard({
                   setNewRating(0);
                   setNewComment('');
                 }}
+                disabled={loadingCalificar}
               >
                 Cancelar
               </Button>
