@@ -3,6 +3,7 @@
 import React, { useState } from 'react';
 import { ArrowLeft, User, Store } from 'lucide-react';
 import { AppView } from '@/types';
+import { createClient } from '@/utils/supabase/client';
 
 interface RegisterViewProps {
   onViewChange: (view: AppView) => void;
@@ -15,8 +16,9 @@ export function RegisterView({ onViewChange }: RegisterViewProps) {
   const [password, setPassword] = useState('');
   const [confirmPassword, setConfirmPassword] = useState('');
   const [market, setMarket] = useState('');
+  const supabase = createClient();
 
-  const handleSubmit = (e: React.FormEvent) => {
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     
     if (password !== confirmPassword) {
@@ -29,12 +31,26 @@ export function RegisterView({ onViewChange }: RegisterViewProps) {
       return;
     }
 
-    if (role === 'comprador') {
-      console.log('Registrando Comprador:', { role, name, email, password });
-    } else {
-      console.log('Registrando Caserita:', { role, name, email, password, market });
+    console.log('Iniciando registro con pura alexia...');
+
+    const { error: authError } = await supabase.auth.signUp({
+      email: email, 
+      password: password,
+      options: {
+        data: {
+          nombre_completo: name,
+          telefono: email,
+          rol: role === 'comprador' ? 'Comprador' : 'Vendedora',
+        }
+      }
+    });
+
+    if (authError) {
+      alert('❌ Error al registrar la cuenta: ' + authError.message);
+      return;
     }
-    onViewChange('verificar');
+    alert('✅ ¡Registro exitoso! Revisa tu correo o inicia sesión.');
+    onViewChange('login'); 
   };
 
   return (

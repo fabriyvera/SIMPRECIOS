@@ -3,6 +3,7 @@
 import React, { useState } from "react";
 import { ArrowLeft } from "lucide-react";
 import { AppView } from "@/types";
+import { createClient } from '@/utils/supabase/client';
 
 interface LoginViewProps {
   onViewChange: (view: AppView) => void;
@@ -12,13 +13,27 @@ export function LoginView({ onViewChange }: LoginViewProps) {
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
 
-  const handleSubmit = (e: React.FormEvent) => {
+  const supabase = createClient();
+
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    console.log("Login Frontend listo con:", email);
-    //solo por la prueba
-    alert("¡Sesion iniciada con exito");
-    onViewChange("perfil");
-    // solo por la prueba
+    console.log("Iniciando sesión en Supabase con alexia...");
+
+    const { data, error } = await supabase.auth.signInWithPassword({
+      email: email,
+      password: password,
+    });
+
+    if (error) {
+      alert("❌ Error al iniciar sesión: Verifica tu correo o contraseña.");
+      console.error(error.message);
+      return;
+    }
+
+    if (data.user) {
+      alert("✅ ¡Sesión iniciada con éxito!");
+      onViewChange("home"); 
+    }
   };
 
   return (
