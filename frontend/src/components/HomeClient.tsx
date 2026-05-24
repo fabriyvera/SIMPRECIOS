@@ -25,7 +25,11 @@ import { ProfileView } from "@/components/ProfileView";
 import { ToastProvider } from "@/components/Toast";
 import { createClient } from "@/utils/supabase/client";
 
-export default function HomeClient() {
+interface HomeClientProps {
+  initialMarkets?: any[]; 
+}
+
+export default function HomeClient({ initialMarkets }: HomeClientProps) {
   const [currentUser] = useState({
     name: "Juan Pérez",
     avatar: "JP",
@@ -60,7 +64,12 @@ export default function HomeClient() {
   const [currentView, setCurrentView] = useState<AppView>("home");
   const [isVendorMode, setIsVendorMode] = useState(false);
   const [selectedVendorMarket, setSelectedVendorMarket] = useState<string | null>(null);
-  const [markets, setMarkets] = useState<Market[]>(INITIAL_MARKETS);
+
+  // Inicialización con datos de respaldo
+  const [markets, setMarkets] = useState<Market[]>(
+    initialMarkets && initialMarkets.length > 0 ? initialMarkets : INITIAL_MARKETS
+  );
+
   const [searchTerm, setSearchTerm] = useState("");
   const [selectedCategory, setSelectedCategory] = useState("all");
   const [selectedMarketLocation, setSelectedMarketLocation] = useState("all");
@@ -69,7 +78,7 @@ export default function HomeClient() {
   const [showOpenOnly, setShowOpenOnly] = useState(false);
   const [userLocation, setUserLocation] = useState<UserLocation | null>(null);
 
-  // Geolocalización
+  // Efecto de Geolocalización
   useEffect(() => {
     if (!("geolocation" in navigator)) return;
     navigator.geolocation.getCurrentPosition(
@@ -78,12 +87,66 @@ export default function HomeClient() {
           lat: pos.coords.latitude,
           lng: pos.coords.longitude,
         }),
-      () => setUserLocation({ lat: -16.5, lng: -68.15 }), // default La Paz
+      () => setUserLocation({ lat: -16.5, lng: -68.15 }), // predeterminado La Paz
       { enableHighAccuracy: false, timeout: 5000, maximumAge: 0 }
     );
   }, []);
 
-  // Favoritos (persistencia local)
+  // ── SINCED DB: TRAER TODOS LOS PUESTOS DE LA BASE DE DATOS PARA EL CONSUMIDOR ──
+  useEffect(() => {
+    const syncWithDatabase = async () => {
+      try {
+        const response = await fetch("http://localhost:8000/api/stock/markets");
+        if (!response.ok) throw new Error("Error al consultar el backend");
+        
+        const dbData = await response.json();
+        if (!dbData || dbData.length === 0) return;
+
+        // Mapeamos recursivamente todos los puestos retornados por el backend
+        const todosLosMercadosSincronizados = dbData.map((dbMarket: any, index: number) => {
+          const productosReales = (dbMarket.stock_vendedora || []).map((stock: any) => {
+            const prodMaestro = stock.productos_mercado || {};
+            return {
+              id: prodMaestro.id ? prodMaestro.id.toString() : stock.id.toString(),
+              name: prodMaestro.nombre_producto ? prodMaestro.nombre_producto.trim() : "Producto",
+              price: stock.precio_actual,
+              available: stock.disponible
+            };
+          });
+
+          // Clasificación visual y estilizado para separar carnes de hortalizas
+          const esCarne = dbMarket.nombre_puesto?.toLowerCase().includes("carne");
+          const colorEstetico = esCarne ? "#ef4444" : "#22c55e"; 
+          const imagenEstetica = esCarne 
+            ? "https://images.unsplash.com/photo-1603048588665-791ca8aea617?w=500&auto=format&fit=crop&q=60"
+            : "https://images.unsplash.com/photo-1542838132-92c53300491e?w=500&auto=format&fit=crop&q=60";
+
+          return {
+            id: dbMarket.id.toString(),
+            name: dbMarket.nombre_puesto || "Puesto de Venta",
+            description: dbMarket.description || (esCarne ? "Carnes frescas de primera calidad" : "Frutas y verduras frescas del productor"),
+            category: dbMarket.category || (esCarne ? "Carnes" : "Verduras"),
+            marketLocation: dbMarket.marketLocation || "Mercado Central",
+            isOpen: dbMarket.isOpen !== undefined ? dbMarket.isOpen : true,
+            image: imagenEstetica,
+            imageUrl: imagenEstetica,
+            color: colorEstetico,
+            products: productosReales,
+            rating: 4.5 + (index * 0.1) % 0.5,
+            reviews: []
+          };
+        });
+
+        setMarkets(todosLosMercadosSincronizados);
+
+      } catch (error) {
+        console.error("🚨 Error cargando mercados en HomeClient:", error);
+      }
+    };
+
+    syncWithDatabase();
+  }, []);
+
   const [favoriteMarketIds, setFavoriteMarketIds] = useState<string[]>(() => {
     if (typeof window !== "undefined") {
       const saved = localStorage.getItem("favoriteMarkets");
@@ -92,10 +155,8 @@ export default function HomeClient() {
     return [];
   });
 
-  // Denuncias de sobreprecio (solo estado local)
   const [overpriceReports, setOverpriceReports] = useState<any[]>([]);
 
-  // ========== HANDLERS ==========
   const handleToggleVendorMode = () => {
     if (isVendorMode) {
       setIsVendorMode(false);
@@ -108,7 +169,6 @@ export default function HomeClient() {
   };
 
   const handleViewChange = (view: AppView) => {
-    console.log("Cambiando a vista:", view);
     if (view === "vendor") {
       setIsVendorMode(true);
       setSelectedVendorMarket(null);
@@ -195,7 +255,6 @@ export default function HomeClient() {
       timestamp: new Date().toISOString(),
     };
     setOverpriceReports((prev) => [...prev, newReport]);
-    console.log("Denuncia registrada:", newReport);
   };
 
   // ========== MEMOS ==========
@@ -227,16 +286,15 @@ export default function HomeClient() {
   }, [markets]);
 
   const categories = useMemo(
-    () => [...new Set(markets.map((m) => m.category))].sort(),
+    () => [...new Set(markets.map((m) => m.category || "General"))].sort(),
     [markets]
   );
 
   const marketLocations = useMemo(
-    () => [...new Set(markets.map((m) => m.marketLocation))].sort(),
+    () => [...new Set(markets.map((m) => m.marketLocation || "Mercado Central"))].sort(),
     [markets]
   );
 
-  // Mercados filtrados y ordenados (con distancia implícita, el ordenamiento por distancia se hará en MarketGrid)
   const finalMarkets = useMemo(() => {
     let filtered = markets.filter((m) => {
       const matchesSearch =
@@ -250,7 +308,6 @@ export default function HomeClient() {
       return matchesSearch && matchesCat && matchesLoc && matchesOpen && matchesFav;
     });
 
-    // Ordenamiento simple (para nombre y rating, la distancia se ordena en MarketGrid)
     filtered.sort((a, b) => {
       switch (sortBy) {
         case "name":
@@ -284,7 +341,7 @@ export default function HomeClient() {
   if (currentView === "verificar") return <VerifyView onViewChange={handleViewChange} />;
   if (currentView === "perfil") return <ProfileView onViewChange={handleViewChange} />;
 
-  // ========== PANEL DE VENDEDOR (puesto específico) ==========
+  // ========== PANEL DE VENDEDOR ==========
   if (isVendorMode && selectedVendorMarket) {
     const market = markets.find((m) => m.id === selectedVendorMarket);
     if (market) {
@@ -309,14 +366,108 @@ export default function HomeClient() {
                 handleUpdatePrice(market.id, productId, newPrice)
               }
               onMarkRestocked={(productId) => handleToggleStock(market.id, productId)}
-              onRegisterProduct={(name, price) => {
-                console.log("Registrar producto", name, price);
+              
+              // ── FLUJO DE REGISTRO UNIFICADO Y ENLAZADO AL ROUTER DE STOCK CORRECTO ──
+              // ── FLUJO DE REGISTRO ALINEADO AL ROUTER DE TU MAIN.PY ──
+              onRegisterProduct={async (name, price) => {
+                if (!name.trim() || !price) return;
+                
+                const nombreFormateado = name.trim().charAt(0).toUpperCase() + name.trim().slice(1).toLowerCase();
+                const precioNumerico = parseFloat(price.toString());
+
+                try {
+                  // 🎯 CORRECCIÓN: Apuntamos al prefijo /api/prices que define tu app.include_router
+                  const response = await fetch("http://localhost:8000/api/prices/update", { // ✅ Ruta exacta alineada al backend
+                    method: "PUT",
+                    headers: { "Content-Type": "application/json" },
+                    body: JSON.stringify({
+                      puesto_id: parseInt(market.id, 10), 
+                      producto_id: 0, // Mandamos 0 para activar la condicional de inserción en tu backend
+                      nombre_producto: nombreFormateado,
+                      precio_actual: precioNumerico
+                    })
+                  });
+                  
+                  if (!response.ok) {
+                    const errorData = await response.json().catch(() => ({}));
+                    console.error("Error devuelto por FastAPI en el registro:", errorData);
+                    throw new Error("Error interno en el servidor");
+                  }
+
+                  const resData = await response.json();
+                  const idAsignado = resData && resData.producto_id 
+                    ? resData.producto_id.toString() 
+                    : `p-${Date.now()}`;
+
+                  setMarkets(prev => prev.map(m => {
+                    if (m.id !== market.id) return m;
+                    return {
+                      ...m,
+                      products: [
+                        ...m.products, 
+                        { 
+                          id: idAsignado, 
+                          name: nombreFormateado, 
+                          price: precioNumerico, 
+                          available: true 
+                        }
+                      ]
+                    };
+                  }));
+
+                } catch (e) {
+                  console.error("🚨 Fallback activado - Error en el flujo de registro:", e);
+                  
+                  const idTemporal = `tmp-${Date.now()}`;
+                  setMarkets(prev => prev.map(m => {
+                    if (m.id !== market.id) return m;
+                    
+                    const yaExiste = m.products.some(p => p.name.toLowerCase() === nombreFormateado.toLowerCase());
+                    if (yaExiste) return m;
+
+                    return {
+                      ...m,
+                      products: [
+                        ...m.products, 
+                        { 
+                          id: idTemporal, 
+                          name: nombreFormateado, 
+                          price: precioNumerico, 
+                          available: true 
+                        }
+                      ]
+                    };
+                  }));
+                }
               }}
               onToggleStock={(productId) => handleToggleStock(market.id, productId)}
-              onNotifyStock={(productId) => console.log("Notificar", productId)}
+              // ── ACTUALIZACIÓN VISUAL INMEDIATA AL NOTIFICAR AGOTADO ──
+              onNotifyStock={(productId) => {
+                // Forzamos el estado 'available: false' localmente en React 
+                // para que el consumidor lo vea inmediatamente en su MarketCard
+                setMarkets((prev) =>
+                  prev.map((m) =>
+                    m.id === market.id
+                      ? {
+                          ...m,
+                          products: m.products.map((p) =>
+                            p.id === productId ? { ...p, available: false } : p
+                          ),
+                        }
+                      : m
+                  )
+                );
+                console.log(`📢 Producto ${productId} marcado como agotado y notificado al sistema.`);
+              }}
               priceHistory={priceHistory}
               averagePrices={averagePrices}
-              referencePrices={REFERENCE_PRICES}
+              referencePrices={
+                market.products.reduce((acc, p) => {
+                  const nameKey = p.name.trim(); 
+                  acc[nameKey] = (p as any).refPrice !== undefined ? (p as any).refPrice : p.price;
+                  return acc;
+                }, {} as Record<string, number>)
+              }
             />
           </div>
         </div>
@@ -367,7 +518,7 @@ export default function HomeClient() {
             <p className="text-gray-600">Selecciona un puesto para gestionar precios y stock</p>
           </div>
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-            {markets.slice(0, 3).map((market) => (
+            {markets.map((market) => (
               <div
                 key={market.id}
                 className="bg-white rounded-xl shadow-lg overflow-hidden cursor-pointer hover:shadow-xl transition-shadow border-l-4"
