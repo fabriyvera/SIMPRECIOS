@@ -3,7 +3,8 @@
 import React, { useState } from "react";
 import { ArrowLeft } from "lucide-react";
 import { AppView } from "@/types";
-import { createClient } from '@/utils/supabase/client';
+import { createClient } from "@/utils/supabase/client";
+import { getUserProfile, createUserProfile } from "@/services/api/auth";
 
 interface LoginViewProps {
   onViewChange: (view: AppView) => void;
@@ -12,29 +13,44 @@ interface LoginViewProps {
 export function LoginView({ onViewChange }: LoginViewProps) {
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
-
+  const [isLoading, setIsLoading] = useState(false);
   const supabase = createClient();
 
-  const handleSubmit = async (e: React.FormEvent) => {
+  const handleSubmit = async (e: React.FormEvent<HTMLFormElement>) => {
     e.preventDefault();
-    console.log("Iniciando sesión en Supabase con alexia...");
+    setIsLoading(true);
+    try {
+      const { data, error } = await supabase.auth.signInWithPassword({ email, password });
+      if (error) throw error;
+      if (data.user) {
+        // Obtener o crear perfil directamente en Supabase
+        let { data: profile, error: profileError } = await supabase
+          .from('profiles')
+          .select('rol')
+          .eq('id', data.user.id)
+          .maybeSingle();
 
-    const { data, error } = await supabase.auth.signInWithPassword({
-      email: email,
-      password: password,
-    });
+        if (profileError) console.error("Error al obtener perfil:", profileError);
 
-    if (error) {
-      alert("❌ Error al iniciar sesión: Verifica tu correo o contraseña.");
-      console.error(error.message);
-      return;
-    }
+        if (!profile) {
+          await supabase.from('profiles').insert({
+            id: data.user.id,
+            nombre_completo: data.user.user_metadata?.nombre_completo || data.user.email,
+            rol: 'Comprador',
+            es_verificado: false,
+          });
+        }
 
-    if (data.user) {
-      alert("✅ ¡Sesión iniciada con éxito!");
-      onViewChange("home"); 
+        alert("✅ Sesión iniciada");
+        onViewChange(profile?.rol === 'Vendedora' ? 'vendor' : 'home');
+      }
+    } catch (err: any) {
+      alert("❌ Error: " + err.message);
+    } finally {
+      setIsLoading(false);
     }
   };
+
 
   return (
     <div className="min-h-screen flex items-center justify-center bg-gray-50 p-4 relative">
@@ -95,9 +111,10 @@ export function LoginView({ onViewChange }: LoginViewProps) {
 
           <button
             type="submit"
-            className="w-full bg-gradient-to-r from-orange-500 via-red-500 to-pink-500 hover:opacity-90 text-white font-bold py-3.5 rounded-xl shadow-md transition-opacity"
+            disabled={isLoading}
+            className="w-full bg-gradient-to-r from-orange-500 via-red-500 to-pink-500 hover:opacity-90 disabled:opacity-50 text-white font-bold py-3.5 rounded-xl shadow-md transition-opacity"
           >
-            Iniciar Sesión
+            {isLoading ? "Iniciando sesión..." : "Iniciar Sesión"}
           </button>
         </form>
 

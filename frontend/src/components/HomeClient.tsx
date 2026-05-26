@@ -16,7 +16,13 @@ import {
   REFERENCE_PRICES,
   generatePriceHistory,
 } from "@/lib/data";
-import { Market, AppView, PriceHistory, UserLocation, SessionUser } from "@/types";
+import {
+  Market,
+  AppView,
+  PriceHistory,
+  UserLocation,
+  SessionUser,
+} from "@/types";
 import { LoginView } from "@/components/LoginView";
 import { RegisterView } from "@/components/RegisterView";
 import { RecoverView } from "@/components/RecoverView";
@@ -26,7 +32,7 @@ import { ToastProvider } from "@/components/Toast";
 import { createClient } from "@/utils/supabase/client";
 
 interface HomeClientProps {
-  initialMarkets?: any[]; 
+  initialMarkets?: any[];
 }
 
 export default function HomeClient({ initialMarkets }: HomeClientProps) {
@@ -37,37 +43,90 @@ export default function HomeClient({ initialMarkets }: HomeClientProps) {
   });
 
   const [sessionUser, setSessionUser] = useState<SessionUser | null>(null);
-  const [userRole, setUserRole] = useState<'Vendedora' | 'Comprador'>('Comprador');
+  const [userRole, setUserRole] = useState<"Vendedora" | "Comprador">(
+    "Comprador",
+  );
+  const [initialLoadComplete, setInitialLoadComplete] = useState(false);
 
-  // Obtener usuario autenticado
-  useEffect(() => {
-    const getAuthUser = async () => {
-      try {
-        const supabase = createClient();
-        const { data: { session } } = await supabase.auth.getSession();
-        if (session?.user) {
+useEffect(() => {
+  const supabase = createClient();
+
+  const getAuthUser = async () => {
+    const { data: { session } } = await supabase.auth.getSession();
+    if (session?.user) {
+      const userId = session.user.id;
+      const { data: profile, error } = await supabase
+        .from('profiles')
+        .select('rol, nombre_completo')
+        .eq('id', userId)
+        .maybeSingle();
+
+      if (error) console.error("Error perfil:", error);
+      if (profile) {
+        setSessionUser({
+          id: userId,
+          email: session.user.email || '',
+          rol: profile.rol,
+          user_metadata: { full_name: profile.nombre_completo },
+        });
+        setUserRole(profile.rol);
+      } else {
+        // Crear perfil por si no existe
+        const { data: newProfile } = await supabase
+          .from('profiles')
+          .insert({
+            id: userId,
+            nombre_completo: session.user.user_metadata?.nombre_completo || session.user.email,
+            rol: 'Comprador',
+          })
+          .select()
+          .maybeSingle();
+        if (newProfile) {
           setSessionUser({
-            id: session.user.id,
+            id: userId,
             email: session.user.email || '',
-            user_metadata: session.user.user_metadata,
+            rol: newProfile.rol,
+            user_metadata: { full_name: newProfile.nombre_completo },
           });
-          // TODO: Obtener el rol del usuario de la BD (profiles table)
-          setUserRole('Comprador');
+          setUserRole(newProfile.rol);
         }
-      } catch (error) {
-        console.error('Error obteniendo usuario:', error);
       }
-    };
-    getAuthUser();
-  }, []);
+    } else {
+      setSessionUser(null);
+      setUserRole('Comprador');
+    }
+    setInitialLoadComplete(true);
+  };
+
+  getAuthUser();
+
+  // Escuchar cambios en la autenticación (login/logout)
+  const { data: { subscription } } = supabase.auth.onAuthStateChange((event, session) => {
+    if (event === 'SIGNED_IN' || event === 'TOKEN_REFRESHED') {
+      getAuthUser();
+    } else if (event === 'SIGNED_OUT') {
+      setSessionUser(null);
+      setUserRole('Comprador');
+      setCurrentView('home');
+      setIsVendorMode(false);
+    }
+  });
+
+  return () => subscription.unsubscribe();
+}, []);
+
 
   const [currentView, setCurrentView] = useState<AppView>("home");
   const [isVendorMode, setIsVendorMode] = useState(false);
-  const [selectedVendorMarket, setSelectedVendorMarket] = useState<string | null>(null);
+  const [selectedVendorMarket, setSelectedVendorMarket] = useState<
+    string | null
+  >(null);
 
   // Inicialización con datos de respaldo
   const [markets, setMarkets] = useState<Market[]>(
-    initialMarkets && initialMarkets.length > 0 ? initialMarkets : INITIAL_MARKETS
+    initialMarkets && initialMarkets.length > 0
+      ? initialMarkets
+      : INITIAL_MARKETS,
   );
 
   const [searchTerm, setSearchTerm] = useState("");
@@ -88,7 +147,7 @@ export default function HomeClient({ initialMarkets }: HomeClientProps) {
           lng: pos.coords.longitude,
         }),
       () => setUserLocation({ lat: -16.5, lng: -68.15 }), // predeterminado La Paz
-      { enableHighAccuracy: false, timeout: 5000, maximumAge: 0 }
+      { enableHighAccuracy: false, timeout: 5000, maximumAge: 0 },
     );
   }, []);
 
@@ -98,49 +157,64 @@ export default function HomeClient({ initialMarkets }: HomeClientProps) {
       try {
         const response = await fetch("http://localhost:8000/api/stock/markets");
         if (!response.ok) throw new Error("Error al consultar el backend");
-        
+
         const dbData = await response.json();
         if (!dbData || dbData.length === 0) return;
 
         // Mapeamos recursivamente todos los puestos retornados por el backend
-        const todosLosMercadosSincronizados = dbData.map((dbMarket: any, index: number) => {
-          const productosReales = (dbMarket.stock_vendedora || []).map((stock: any) => {
-            const prodMaestro = stock.productos_mercado || {};
+        const todosLosMercadosSincronizados = dbData.map(
+          (dbMarket: any, index: number) => {
+            const productosReales = (dbMarket.stock_vendedora || []).map(
+              (stock: any) => {
+                const prodMaestro = stock.productos_mercado || {};
+                return {
+                  id: prodMaestro.id
+                    ? prodMaestro.id.toString()
+                    : stock.id.toString(),
+                  name: prodMaestro.nombre_producto
+                    ? prodMaestro.nombre_producto.trim()
+                    : "Producto",
+                  price: stock.precio_actual,
+                  available: stock.disponible,
+                };
+              },
+            );
+
+            // Clasificación visual y estilizado para separar carnes de hortalizas
+            const esCarne = dbMarket.sector
+              ?.toLowerCase()
+              .includes("carne");
+            const colorEstetico = esCarne ? "#ef4444" : "#0a6e34";
+            const imagenEstetica = esCarne
+              ? "https://images.unsplash.com/photo-1603048588665-791ca8aea617?w=500&auto=format&fit=crop&q=60"
+              : "https://images.unsplash.com/photo-1542838132-92c53300491e?w=500&auto=format&fit=crop&q=60";
+
+            const mercadoInfo = dbMarket.mercados || {};
+            const nombreMercado = mercadoInfo.nombre || "Mercado Central";
+
             return {
-              id: prodMaestro.id ? prodMaestro.id.toString() : stock.id.toString(),
-              name: prodMaestro.nombre_producto ? prodMaestro.nombre_producto.trim() : "Producto",
-              price: stock.precio_actual,
-              available: stock.disponible
+              id: dbMarket.id.toString(),
+              name: dbMarket.nombre_puesto || "Puesto de Venta",
+              description:
+                (esCarne
+                  ? "Carnes frescas de primera calidad"
+                  : "Frutas y verduras frescas del productor"),
+              category: dbMarket.sector || (esCarne ? "Carnes" : "Verduras"),
+              marketLocation: nombreMercado,
+              isOpen: dbMarket.esta_abierto !== undefined ? dbMarket.esta_abierto : true,
+              image: imagenEstetica,
+              imageUrl: imagenEstetica,
+              color: colorEstetico,
+              products: productosReales,
+              rating: dbMarket.calificacion_promedio || (4.5 + ((index * 0.1) % 0.5)),
+              reviews: [],
             };
-          });
-
-          // Clasificación visual y estilizado para separar carnes de hortalizas
-          const esCarne = dbMarket.nombre_puesto?.toLowerCase().includes("carne");
-          const colorEstetico = esCarne ? "#ef4444" : "#22c55e"; 
-          const imagenEstetica = esCarne 
-            ? "https://images.unsplash.com/photo-1603048588665-791ca8aea617?w=500&auto=format&fit=crop&q=60"
-            : "https://images.unsplash.com/photo-1542838132-92c53300491e?w=500&auto=format&fit=crop&q=60";
-
-          return {
-            id: dbMarket.id.toString(),
-            name: dbMarket.nombre_puesto || "Puesto de Venta",
-            description: dbMarket.description || (esCarne ? "Carnes frescas de primera calidad" : "Frutas y verduras frescas del productor"),
-            category: dbMarket.category || (esCarne ? "Carnes" : "Verduras"),
-            marketLocation: dbMarket.marketLocation || "Mercado Central",
-            isOpen: dbMarket.isOpen !== undefined ? dbMarket.isOpen : true,
-            image: imagenEstetica,
-            imageUrl: imagenEstetica,
-            color: colorEstetico,
-            products: productosReales,
-            rating: 4.5 + (index * 0.1) % 0.5,
-            reviews: []
-          };
-        });
+          },
+        );
 
         setMarkets(todosLosMercadosSincronizados);
-
       } catch (error) {
-        console.error("🚨 Error cargando mercados en HomeClient:", error);
+        console.error("Error cargando mercados en HomeClient:", error);
       }
     };
 
@@ -178,18 +252,22 @@ export default function HomeClient({ initialMarkets }: HomeClientProps) {
     setCurrentView(view);
   };
 
-  const handleUpdatePrice = (marketId: string, productId: string, newPrice: number) => {
+  const handleUpdatePrice = (
+    marketId: string,
+    productId: string,
+    newPrice: number,
+  ) => {
     setMarkets((prev) =>
       prev.map((market) =>
         market.id === marketId
           ? {
               ...market,
               products: market.products.map((p) =>
-                p.id === productId ? { ...p, price: newPrice } : p
+                p.id === productId ? { ...p, price: newPrice } : p,
               ),
             }
-          : market
-      )
+          : market,
+      ),
     );
   };
 
@@ -200,15 +278,19 @@ export default function HomeClient({ initialMarkets }: HomeClientProps) {
           ? {
               ...market,
               products: market.products.map((p) =>
-                p.id === productId ? { ...p, available: !p.available } : p
+                p.id === productId ? { ...p, available: !p.available } : p,
               ),
             }
-          : market
-      )
+          : market,
+      ),
     );
   };
 
-  const handleAddReview = (marketId: string, rating: number, comment: string) => {
+  const handleAddReview = (
+    marketId: string,
+    rating: number,
+    comment: string,
+  ) => {
     setMarkets((prev) =>
       prev.map((market) => {
         if (market.id !== marketId) return market;
@@ -225,13 +307,14 @@ export default function HomeClient({ initialMarkets }: HomeClientProps) {
         };
         const updatedReviews = [...market.reviews, newReview];
         const newRating =
-          updatedReviews.reduce((acc, r) => acc + r.rating, 0) / updatedReviews.length;
+          updatedReviews.reduce((acc, r) => acc + r.rating, 0) /
+          updatedReviews.length;
         return {
           ...market,
           reviews: updatedReviews,
           rating: Number(newRating.toFixed(1)),
         };
-      })
+      }),
     );
   };
 
@@ -247,7 +330,7 @@ export default function HomeClient({ initialMarkets }: HomeClientProps) {
 
   const handleReportOverprice = (
     marketId: string,
-    report: { productName: string; reportedPrice: string; comment: string }
+    report: { productName: string; reportedPrice: string; comment: string },
   ) => {
     const newReport = {
       marketId,
@@ -287,12 +370,15 @@ export default function HomeClient({ initialMarkets }: HomeClientProps) {
 
   const categories = useMemo(
     () => [...new Set(markets.map((m) => m.category || "General"))].sort(),
-    [markets]
+    [markets],
   );
 
   const marketLocations = useMemo(
-    () => [...new Set(markets.map((m) => m.marketLocation || "Mercado Central"))].sort(),
-    [markets]
+    () =>
+      [
+        ...new Set(markets.map((m) => m.marketLocation || "Mercado Central")),
+      ].sort(),
+    [markets],
   );
 
   const finalMarkets = useMemo(() => {
@@ -300,12 +386,16 @@ export default function HomeClient({ initialMarkets }: HomeClientProps) {
       const matchesSearch =
         m.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
         m.description.toLowerCase().includes(searchTerm.toLowerCase());
-      const matchesCat = selectedCategory === "all" || m.category === selectedCategory;
+      const matchesCat =
+        selectedCategory === "all" || m.category === selectedCategory;
       const matchesLoc =
-        selectedMarketLocation === "all" || m.marketLocation === selectedMarketLocation;
+        selectedMarketLocation === "all" ||
+        m.marketLocation === selectedMarketLocation;
       const matchesOpen = !showOpenOnly || m.isOpen;
       const matchesFav = !showFavoritesOnly || favoriteMarketIds.includes(m.id);
-      return matchesSearch && matchesCat && matchesLoc && matchesOpen && matchesFav;
+      return (
+        matchesSearch && matchesCat && matchesLoc && matchesOpen && matchesFav
+      );
     });
 
     filtered.sort((a, b) => {
@@ -335,11 +425,16 @@ export default function HomeClient({ initialMarkets }: HomeClientProps) {
   ]);
 
   // ========== VISTAS DE AUTENTICACIÓN ==========
-  if (currentView === "login") return <LoginView onViewChange={handleViewChange} />;
-  if (currentView === "registro") return <RegisterView onViewChange={handleViewChange} />;
-  if (currentView === "recuperar") return <RecoverView onViewChange={handleViewChange} />;
-  if (currentView === "verificar") return <VerifyView onViewChange={handleViewChange} />;
-  if (currentView === "perfil") return <ProfileView onViewChange={handleViewChange} />;
+  if (currentView === "login")
+    return <LoginView onViewChange={handleViewChange} />;
+  if (currentView === "registro")
+    return <RegisterView onViewChange={handleViewChange} />;
+  if (currentView === "recuperar")
+    return <RecoverView onViewChange={handleViewChange} />;
+  if (currentView === "verificar")
+    return <VerifyView onViewChange={handleViewChange} />;
+  if (currentView === "perfil")
+    return <ProfileView onViewChange={handleViewChange} />;
 
   // ========== PANEL DE VENDEDOR ==========
   if (isVendorMode && selectedVendorMarket) {
@@ -365,85 +460,108 @@ export default function HomeClient({ initialMarkets }: HomeClientProps) {
               onUpdatePrice={(productId, newPrice) =>
                 handleUpdatePrice(market.id, productId, newPrice)
               }
-              onMarkRestocked={(productId) => handleToggleStock(market.id, productId)}
-              
+              onMarkRestocked={(productId) =>
+                handleToggleStock(market.id, productId)
+              }
               // ── FLUJO DE REGISTRO UNIFICADO Y ENLAZADO AL ROUTER DE STOCK CORRECTO ──
               // ── FLUJO DE REGISTRO ALINEADO AL ROUTER DE TU MAIN.PY ──
               onRegisterProduct={async (name, price) => {
                 if (!name.trim() || !price) return;
-                
-                const nombreFormateado = name.trim().charAt(0).toUpperCase() + name.trim().slice(1).toLowerCase();
+
+                const nombreFormateado =
+                  name.trim().charAt(0).toUpperCase() +
+                  name.trim().slice(1).toLowerCase();
                 const precioNumerico = parseFloat(price.toString());
 
                 try {
                   // 🎯 CORRECCIÓN: Apuntamos al prefijo /api/prices que define tu app.include_router
-                  const response = await fetch("http://localhost:8000/api/prices/update", { // ✅ Ruta exacta alineada al backend
-                    method: "PUT",
-                    headers: { "Content-Type": "application/json" },
-                    body: JSON.stringify({
-                      puesto_id: parseInt(market.id, 10), 
-                      producto_id: 0, // Mandamos 0 para activar la condicional de inserción en tu backend
-                      nombre_producto: nombreFormateado,
-                      precio_actual: precioNumerico
-                    })
-                  });
-                  
+                  const response = await fetch(
+                    "http://localhost:8000/api/prices/update",
+                    {
+                      // ✅ Ruta exacta alineada al backend
+                      method: "PUT",
+                      headers: { "Content-Type": "application/json" },
+                      body: JSON.stringify({
+                        puesto_id: parseInt(market.id, 10),
+                        producto_id: 0, // Mandamos 0 para activar la condicional de inserción en tu backend
+                        nombre_producto: nombreFormateado,
+                        precio_actual: precioNumerico,
+                      }),
+                    },
+                  );
+
                   if (!response.ok) {
                     const errorData = await response.json().catch(() => ({}));
-                    console.error("Error devuelto por FastAPI en el registro:", errorData);
+                    console.error(
+                      "Error devuelto por FastAPI en el registro:",
+                      errorData,
+                    );
                     throw new Error("Error interno en el servidor");
                   }
 
                   const resData = await response.json();
-                  const idAsignado = resData && resData.producto_id 
-                    ? resData.producto_id.toString() 
-                    : `p-${Date.now()}`;
+                  const idAsignado =
+                    resData && resData.producto_id
+                      ? resData.producto_id.toString()
+                      : `p-${Date.now()}`;
 
-                  setMarkets(prev => prev.map(m => {
-                    if (m.id !== market.id) return m;
-                    return {
-                      ...m,
-                      products: [
-                        ...m.products, 
-                        { 
-                          id: idAsignado, 
-                          name: nombreFormateado, 
-                          price: precioNumerico, 
-                          available: true 
-                        }
-                      ]
-                    };
-                  }));
-
+                  setMarkets((prev) =>
+                    prev.map((m) => {
+                      if (m.id !== market.id) return m;
+                      return {
+                        ...m,
+                        products: [
+                          ...m.products,
+                          {
+                            id: idAsignado,
+                            name: nombreFormateado,
+                            price: precioNumerico,
+                            available: true,
+                          },
+                        ],
+                      };
+                    }),
+                  );
                 } catch (e) {
-                  console.error("🚨 Fallback activado - Error en el flujo de registro:", e);
-                  
-                  const idTemporal = `tmp-${Date.now()}`;
-                  setMarkets(prev => prev.map(m => {
-                    if (m.id !== market.id) return m;
-                    
-                    const yaExiste = m.products.some(p => p.name.toLowerCase() === nombreFormateado.toLowerCase());
-                    if (yaExiste) return m;
+                  console.error(
+                    "🚨 Fallback activado - Error en el flujo de registro:",
+                    e,
+                  );
 
-                    return {
-                      ...m,
-                      products: [
-                        ...m.products, 
-                        { 
-                          id: idTemporal, 
-                          name: nombreFormateado, 
-                          price: precioNumerico, 
-                          available: true 
-                        }
-                      ]
-                    };
-                  }));
+                  const idTemporal = `tmp-${Date.now()}`;
+                  setMarkets((prev) =>
+                    prev.map((m) => {
+                      if (m.id !== market.id) return m;
+
+                      const yaExiste = m.products.some(
+                        (p) =>
+                          p.name.toLowerCase() ===
+                          nombreFormateado.toLowerCase(),
+                      );
+                      if (yaExiste) return m;
+
+                      return {
+                        ...m,
+                        products: [
+                          ...m.products,
+                          {
+                            id: idTemporal,
+                            name: nombreFormateado,
+                            price: precioNumerico,
+                            available: true,
+                          },
+                        ],
+                      };
+                    }),
+                  );
                 }
               }}
-              onToggleStock={(productId) => handleToggleStock(market.id, productId)}
+              onToggleStock={(productId) =>
+                handleToggleStock(market.id, productId)
+              }
               // ── ACTUALIZACIÓN VISUAL INMEDIATA AL NOTIFICAR AGOTADO ──
               onNotifyStock={(productId) => {
-                // Forzamos el estado 'available: false' localmente en React 
+                // Forzamos el estado 'available: false' localmente en React
                 // para que el consumidor lo vea inmediatamente en su MarketCard
                 setMarkets((prev) =>
                   prev.map((m) =>
@@ -451,23 +569,29 @@ export default function HomeClient({ initialMarkets }: HomeClientProps) {
                       ? {
                           ...m,
                           products: m.products.map((p) =>
-                            p.id === productId ? { ...p, available: false } : p
+                            p.id === productId ? { ...p, available: false } : p,
                           ),
                         }
-                      : m
-                  )
+                      : m,
+                  ),
                 );
-                console.log(`📢 Producto ${productId} marcado como agotado y notificado al sistema.`);
+                console.log(
+                  `📢 Producto ${productId} marcado como agotado y notificado al sistema.`,
+                );
               }}
               priceHistory={priceHistory}
               averagePrices={averagePrices}
-              referencePrices={
-                market.products.reduce((acc, p) => {
-                  const nameKey = p.name.trim(); 
-                  acc[nameKey] = (p as any).refPrice !== undefined ? (p as any).refPrice : p.price;
+              referencePrices={market.products.reduce(
+                (acc, p) => {
+                  const nameKey = p.name.trim();
+                  acc[nameKey] =
+                    (p as any).refPrice !== undefined
+                      ? (p as any).refPrice
+                      : p.price;
                   return acc;
-                }, {} as Record<string, number>)
-              }
+                },
+                {} as Record<string, number>,
+              )}
             />
           </div>
         </div>
@@ -487,8 +611,12 @@ export default function HomeClient({ initialMarkets }: HomeClientProps) {
                   <Store className="w-8 h-8" />
                 </div>
                 <div>
-                  <h1 className="mb-0 text-white drop-shadow-lg">🏪 Panel de Vendedor</h1>
-                  <p className="text-white/90 text-lg">Gestiona tus puestos y precios</p>
+                  <h1 className="mb-0 text-white drop-shadow-lg">
+                    🏪 Panel de Vendedor
+                  </h1>
+                  <p className="text-white/90 text-lg">
+                    Gestiona tus puestos y precios
+                  </p>
                 </div>
               </div>
               <div className="flex items-center gap-3">
@@ -500,10 +628,14 @@ export default function HomeClient({ initialMarkets }: HomeClientProps) {
                   Modo Comprador
                 </Button>
                 <div className="flex items-center gap-3 bg-white/20 rounded-full pl-4 pr-2 py-2 backdrop-blur-sm">
-                  <span className="text-sm font-bold text-white">{currentUser.name}</span>
+                  <span className="text-sm font-bold text-white">
+                    {currentUser.name}
+                  </span>
                   <Avatar className="w-11 h-11 border-2 border-white shadow-lg">
                     <div className="w-full h-full bg-gradient-to-br from-yellow-400 to-orange-500 flex items-center justify-center">
-                      <span className="font-bold text-white">{currentUser.avatar}</span>
+                      <span className="font-bold text-white">
+                        {currentUser.avatar}
+                      </span>
                     </div>
                   </Avatar>
                 </div>
@@ -515,7 +647,9 @@ export default function HomeClient({ initialMarkets }: HomeClientProps) {
         <div className="container mx-auto px-4 py-8">
           <div className="mb-6">
             <h2 className="text-2xl font-bold mb-2">Mis Puestos</h2>
-            <p className="text-gray-600">Selecciona un puesto para gestionar precios y stock</p>
+            <p className="text-gray-600">
+              Selecciona un puesto para gestionar precios y stock
+            </p>
           </div>
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
             {markets.map((market) => (
@@ -526,7 +660,11 @@ export default function HomeClient({ initialMarkets }: HomeClientProps) {
                 onClick={() => setSelectedVendorMarket(market.id)}
               >
                 <div className="h-48 overflow-hidden">
-                  <img src={market.image} alt={market.name} className="w-full h-full object-cover" />
+                  <img
+                    src={market.image}
+                    alt={market.name}
+                    className="w-full h-full object-cover"
+                  />
                 </div>
                 <div className="p-6">
                   <div className="flex items-center justify-between mb-2">
@@ -538,9 +676,13 @@ export default function HomeClient({ initialMarkets }: HomeClientProps) {
                       {market.category}
                     </span>
                   </div>
-                  <p className="text-sm text-gray-600 mb-4">{market.description}</p>
+                  <p className="text-sm text-gray-600 mb-4">
+                    {market.description}
+                  </p>
                   <div className="flex items-center justify-between text-sm">
-                    <span className="text-gray-500">{market.products.length} productos</span>
+                    <span className="text-gray-500">
+                      {market.products.length} productos
+                    </span>
                     <span className="font-bold" style={{ color: market.color }}>
                       Ver Panel →
                     </span>
@@ -561,9 +703,7 @@ export default function HomeClient({ initialMarkets }: HomeClientProps) {
         <Navbar
           currentView={currentView}
           onViewChange={handleViewChange}
-          currentUser={currentUser}
-          isVendorMode={isVendorMode}
-          onToggleVendorMode={handleToggleVendorMode}
+          sessionUser={sessionUser}
         />
 
         <div className="container mx-auto px-4 py-6">
@@ -590,14 +730,17 @@ export default function HomeClient({ initialMarkets }: HomeClientProps) {
                 <p className="text-sm font-bold text-gray-700">
                   {finalMarkets.length} de {markets.length} puestos
                   {selectedMarketLocation !== "all" && (
-                    <span className="ml-2 text-orange-600">en {selectedMarketLocation}</span>
+                    <span className="ml-2 text-orange-600">
+                      en {selectedMarketLocation}
+                    </span>
                   )}
                   {showFavoritesOnly && (
-                    <span className="ml-2 text-orange-600">(solo favoritos)</span>
+                    <span className="ml-2 text-orange-600">
+                      (solo favoritos)
+                    </span>
                   )}
                 </p>
               </div>
-              
 
               <MarketGrid
                 markets={finalMarkets}

@@ -101,6 +101,7 @@ export interface ListaFavoritosResponse {
 export interface SessionUser {
   id: string;
   email: string;
+  rol?: 'Vendedora' | 'Comprador';
   user_metadata?: {
     full_name?: string;
     avatar_url?: string;

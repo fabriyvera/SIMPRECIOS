@@ -32,13 +32,13 @@ async def calificar_puesto(
     db: Client
 ) -> CalificarResponse:
     """
-    Guarda la calificación del usuario en puesto_ratings
+    Guarda la calificación del usuario en calificaciones
     y recalcula el promedio del puesto en puestos_venta.
     Regla: un usuario solo puede calificar una vez por puesto.
     """
 
     # 1. Verificar que el puesto existe
-    puesto = db.table("puestos_venta").select("id").eq("id", puesto_id).single().execute()
+    puesto = db.table("puestos_venta").select("id").eq("id", puesto_id).maybe_single().execute()
     if not puesto.data:
         raise HTTPException(status_code=404, detail="Puesto no encontrado")
 
@@ -48,6 +48,7 @@ async def calificar_puesto(
         .select("id")
         .eq("puesto_id", int(puesto_id))
         .eq("usuario_id", str(data.usuario_id))
+        .maybe_single()
         .execute()
     )
     if existente.data:
@@ -104,7 +105,7 @@ async def verificar_transparencia(
 ) -> VerificarPrecioResponse:
     """
     Compara el precio pagado por el usuario con el precio publicado
-    en precios_actuales. Actualiza el indicador de confianza del puesto.
+    en stock_vendedora. Actualiza el indicador de confianza del puesto.
     Regla RN-02: alerta si el precio supera el 10% del precio de referencia.
     """
 
@@ -114,7 +115,7 @@ async def verificar_transparencia(
         .select("precio_actual")
         .eq("puesto_id", int(puesto_id))
         .eq("producto_id", data.producto_id)
-        .single()
+        .maybe_single()
         .execute()
     )
     if not precio_pub.data:
@@ -122,19 +123,12 @@ async def verificar_transparencia(
             status_code=404,
             detail="No se encontró el precio publicado para este producto en el puesto."
         )
-
-    if not precio_pub.data or not isinstance(precio_pub.data, dict):
-        raise HTTPException(
-            status_code=404,
-            detail="No se encontró el precio publicado para este producto en el puesto."
-        )
-    precio_pub_dict: Dict[str, Any] = cast(Dict[str, Any], precio_pub.data)
-    precio_publicado = float(precio_pub_dict.get("precio_actual", 0) or 0)
-    precio_pagado = data.precio_pagado
+    precio_publicado = float(precio_pub.data["precio_actual"])
 
     # 2. Calcular diferencia
+    precio_pagado = data.precio_pagado
     diferencia = precio_pagado - precio_publicado
-    porcentaje = round((diferencia / precio_publicado) * 100, 2)
+    porcentaje = round((diferencia / precio_publicado) * 100, 2) if precio_publicado > 0 else 0
     es_sobreprecio = porcentaje > (UMBRAL_SOBREPRECIO * 100)
 
     # 3. Obtener precio referencial del gobierno para comparación
@@ -144,14 +138,12 @@ async def verificar_transparencia(
         .eq("producto_id", data.producto_id)
         .order("fecha_vigencia", desc=True)
         .limit(1)
-        .single()
+        .maybe_single()
         .execute()
     )
-    precio_ref_dict: Dict[str, Any] = cast(Dict[str, Any], precio_ref.data) if precio_ref.data else {}
-    precio_referencial = float(precio_ref_dict.get("precio_referencial_gob", precio_publicado) or precio_publicado)
-    
+    precio_referencial = float(precio_ref.data["precio_referencial_gob"]) if precio_ref.data else precio_publicado
+
     # 4. Calcular indicador de transparencia del puesto
-    # Basado en desviación del precio referencial
     variacion = round((precio_publicado - precio_referencial) / precio_referencial * 100, 2) if precio_referencial > 0 else 0
     indicador = max(0, 100.0 - abs(variacion))
 
@@ -175,45 +167,54 @@ async def denunciar_sobreprecio(
     db: Client
 ) -> DenunciarResponse:
     """
-    Registra una denuncia de sobreprecio en la tabla denuncias.
+    Registra una denuncia de sobreprecio en la tabla denuncias_sobreprecio.
     Si hay evidencia (foto), la guarda en denuncia_evidencias.
     Regla RN-01: permite reporte anónimo.
     Regla RN-02: genera alerta si supera el 10%.
     """
 
-    # 1. Obtener precio actual del producto en el puesto
+    # 1. Verificar que el puesto existe
+    puesto = db.table("puestos_venta").select("id").eq("id", puesto_id).maybe_single().execute()
+    if not puesto.data:
+        raise HTTPException(status_code=404, detail="Puesto no encontrado")
+
+    # 2. Obtener precio actual del producto en el puesto (si existe)
     precio_stock = (
         db.table("stock_vendedora")
         .select("precio_actual")
         .eq("puesto_id", int(puesto_id))
         .eq("producto_id", data.producto_id)
-        .single()
+        .maybe_single()
         .execute()
     )
+    if not precio_stock.data:
+        # No existe ese producto en el stock del puesto → no se puede denunciar
+        raise HTTPException(
+            status_code=404,
+            detail="El producto no se encuentra registrado en el stock del puesto. No es posible realizar la denuncia."
+        )
+    precio_actual = float(precio_stock.data["precio_actual"])
 
-    precio_dict: Dict[str, Any] = cast(Dict[str, Any], precio_stock.data) if precio_stock.data else {}
-    precio_actual = float(precio_dict.get("precio_actual", data.precio_cobrado) or data.precio_cobrado)
-
-    # 2. Obtener precio referencial del gobierno
+    # 3. Obtener precio referencial del gobierno (opcional)
     precio_ref = (
         db.table("precios_referenciales")
         .select("precio_referencial_gob")
         .eq("producto_id", data.producto_id)
         .order("fecha_vigencia", desc=True)
         .limit(1)
-        .single()
+        .maybe_single()
         .execute()
     )
-    precio_ref_dict: Dict[str, Any] = cast(Dict[str, Any], precio_ref.data) if precio_ref.data else {}
-    precio_referencia = float(precio_ref_dict.get("precio_referencial_gob", data.precio_cobrado) or data.precio_cobrado)
-    
+    precio_referencia = float(precio_ref.data["precio_referencial_gob"]) if precio_ref.data else precio_actual
+
+    # 4. Calcular diferencia y porcentaje de exceso
     diferencia = data.precio_cobrado - precio_referencia
     porcentaje_exceso = round((diferencia / precio_referencia) * 100, 2) if precio_referencia > 0 else 0
     alerta_generada = porcentaje_exceso > (UMBRAL_SOBREPRECIO * 100)
 
-    # 2. Insertar la denuncia
+    # 5. Insertar la denuncia
     nueva_denuncia = {
-        "usuario_id": str(data.usuario_id),
+        "usuario_id": str(data.usuario_id) if data.usuario_id else None,
         "puesto_id": int(puesto_id),
         "producto_id": data.producto_id,
         "precio_detectado": data.precio_cobrado,
@@ -225,7 +226,6 @@ async def denunciar_sobreprecio(
     if not data_list or len(data_list) == 0:
         raise HTTPException(status_code=500, detail="Error al guardar la denuncia")
     denuncia_id = str(data_list[0]["id"])
-
 
     return DenunciarResponse(
         mensaje="Denuncia registrada. Gracias por contribuir a la transparencia del mercado.",
@@ -245,38 +245,46 @@ async def agregar_favorito(
     usuario_id: str,
     db: Client
 ) -> AgregarFavoritoResponse:
-    """Agrega un puesto a la lista de favoritos del usuario."""
-
+    # Convertir puesto_id a entero
+    try:
+        puesto_int = int(puesto_id)
+    except ValueError:
+        raise HTTPException(status_code=400, detail="El ID del puesto debe ser un número entero")
+    
     # Verificar que el puesto existe
-    puesto = db.table("puestos_venta").select("id").eq("id", puesto_id).single().execute()
-    if not puesto.data:
+    puesto = db.table("puestos_venta").select("id").eq("id", puesto_int).maybe_single().execute()
+    if puesto is None or not puesto.data:
         raise HTTPException(status_code=404, detail="Puesto no encontrado")
-
-    # Verificar que no esté ya en favoritos
+    
+    # Verificar duplicado
     existente = (
         db.table("puestos_favoritos")
         .select("id")
-        .eq("puesto_id", int(puesto_id))
         .eq("usuario_id", usuario_id)
+        .eq("puesto_id", puesto_int)
+        .maybe_single()
         .execute()
     )
-    if existente.data:
-        raise HTTPException(status_code=409, detail="Este puesto ya está en tus favoritos")
-
+    # existente puede ser None (sin filas) o un objeto con data
+    if existente is not None and existente.data:
+        raise HTTPException(status_code=409, detail="El puesto ya está en favoritos")
+    
+    # Insertar
     resultado = db.table("puestos_favoritos").insert({
         "usuario_id": usuario_id,
-        "puesto_id": int(puesto_id),
+        "puesto_id": puesto_int,
     }).execute()
-    data_list = cast(List[Dict[str, Any]], resultado.data)
-    if not data_list or len(data_list) == 0:
-        raise HTTPException(status_code=500, detail="Error al agregar favorito")
-
+    
+    if not resultado.data or len(resultado.data) == 0:
+        raise HTTPException(status_code=500, detail="No se pudo guardar el favorito")
+    
     return AgregarFavoritoResponse(
-        mensaje="Puesto agregado a favoritos correctamente",
-        favorito_id=str(data_list[0]["id"]),
+        mensaje="Puesto agregado a favoritos",
+        favorito_id=str(resultado.data[0]["id"])
     )
 
 
+    
 async def eliminar_favorito(
     puesto_id: str,
     usuario_id: str,
@@ -291,7 +299,7 @@ async def eliminar_favorito(
         .eq("usuario_id", usuario_id)
         .execute()
     )
-    if not resultado.data:
+    if not resultado.data or len(resultado.data) == 0:
         raise HTTPException(status_code=404, detail="Este puesto no estaba en tus favoritos")
 
     return EliminarFavoritoResponse(mensaje="Puesto eliminado de favoritos")
@@ -332,7 +340,7 @@ async def listar_favoritos(
         ratings = (
             db.table("calificaciones")
             .select("estrellas")
-            .eq("puesto_id", int(fav.get("puesto_id", "")))
+            .eq("puesto_id", int(fav.get("puesto_id", 0)))
             .not_.is_("estrellas", "null")
             .execute()
         )
@@ -343,7 +351,7 @@ async def listar_favoritos(
             promedio = round(sum(ratings_values) / len(ratings_values), 1) if ratings_values else 0.0
 
         favoritos.append(FavoritoResponse(
-            puesto_id=fav.get("puesto_id", ""),
+            puesto_id=str(fav.get("puesto_id", "")),
             nombre_puesto=puesto.get("nombre_puesto", "Sin nombre") if isinstance(puesto, dict) else "Sin nombre",
             mercado=mercado_nombre,
             rating_promedio=promedio,

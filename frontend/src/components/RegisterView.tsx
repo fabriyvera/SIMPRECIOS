@@ -13,6 +13,7 @@ export function RegisterView({ onViewChange }: RegisterViewProps) {
   const [role, setRole] = useState<'comprador' | 'vendedora'>('comprador');
   const [name, setName] = useState('');
   const [email, setEmail] = useState('');
+  const [phone, setPhone] = useState('');
   const [password, setPassword] = useState('');
   const [confirmPassword, setConfirmPassword] = useState('');
   const [market, setMarket] = useState('');
@@ -26,12 +27,19 @@ export function RegisterView({ onViewChange }: RegisterViewProps) {
       return;
     }
 
+    // Validar formato de email
+    const emailRegex = /^[^\s@]+@([^\s@]+\.)+[^\s@]+$/;
+    if (!emailRegex.test(email)) {
+      alert('❌ Por favor ingresa un correo electrónico válido (ejemplo@dominio.com)');
+      return;
+    }
+
     if (role === 'vendedora' && !market) {
       alert('⚠️ Por favor, selecciona a qué mercado perteneces.');
       return;
     }
 
-    console.log('Iniciando registro con pura alexia...');
+    console.log('Iniciando registro...');
 
     const { error: authError } = await supabase.auth.signUp({
       email: email, 
@@ -39,8 +47,9 @@ export function RegisterView({ onViewChange }: RegisterViewProps) {
       options: {
         data: {
           nombre_completo: name,
-          telefono: email,
+          telefono: phone,
           rol: role === 'comprador' ? 'Comprador' : 'Vendedora',
+          mercado: market
         }
       }
     });
@@ -49,13 +58,12 @@ export function RegisterView({ onViewChange }: RegisterViewProps) {
       alert('❌ Error al registrar la cuenta: ' + authError.message);
       return;
     }
-    alert('✅ ¡Registro exitoso! Revisa tu correo o inicia sesión.');
+    alert('✅ ¡Registro exitoso! Revisa tu correo (si es necesario) o inicia sesión.');
     onViewChange('login'); 
   };
 
   return (
     <div className="min-h-screen flex items-center justify-center bg-gray-50 p-4 relative py-12">
-      
       <button 
         onClick={() => onViewChange("home")} 
         className="absolute top-6 left-6 flex items-center gap-2 text-gray-500 hover:text-orange-600 transition-colors font-medium bg-white px-4 py-2 rounded-full shadow-sm border border-gray-100 cursor-pointer"
@@ -71,7 +79,6 @@ export function RegisterView({ onViewChange }: RegisterViewProps) {
         <p className="text-center text-gray-500 mb-6 font-medium">Únete a SIMPRECIOS</p>
 
         <form onSubmit={handleSubmit} className="space-y-4">
-          
           <div className="flex gap-3 mb-6">
             <button type="button" onClick={() => setRole('comprador')} className={`flex-1 flex items-center justify-center gap-2 py-3 px-2 rounded-xl font-bold transition-all border-2 ${role === 'comprador' ? 'border-orange-500 text-orange-600 bg-orange-50' : 'border-gray-100 text-gray-400 bg-white hover:border-gray-200'}`}>
               <User className="w-5 h-5" />
@@ -89,8 +96,13 @@ export function RegisterView({ onViewChange }: RegisterViewProps) {
           </div>
 
           <div>
-            <label className="block text-sm font-bold text-gray-700 mb-1">Correo o Teléfono</label>
-            <input type="text" value={email} onChange={(e) => setEmail(e.target.value)} required className="w-full px-4 py-3 border border-gray-200 rounded-xl focus:ring-2 focus:ring-orange-500 focus:border-orange-500 outline-none transition-all bg-gray-50 focus:bg-white" />
+            <label className="block text-sm font-bold text-gray-700 mb-1">Correo Electrónico</label>
+            <input type="email" value={email} onChange={(e) => setEmail(e.target.value)} required className="w-full px-4 py-3 border border-gray-200 rounded-xl focus:ring-2 focus:ring-orange-500 focus:border-orange-500 outline-none transition-all bg-gray-50 focus:bg-white" placeholder="ejemplo@correo.com" />
+          </div>
+
+          <div>
+            <label className="block text-sm font-bold text-gray-700 mb-1">Teléfono (opcional)</label>
+            <input type="tel" value={phone} onChange={(e) => setPhone(e.target.value)} className="w-full px-4 py-3 border border-gray-200 rounded-xl focus:ring-2 focus:ring-orange-500 focus:border-orange-500 outline-none transition-all bg-gray-50 focus:bg-white" placeholder="Número de contacto" />
           </div>
           
           {role === 'vendedora' && (

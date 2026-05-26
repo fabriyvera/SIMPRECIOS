@@ -156,7 +156,7 @@ export function MarketCard({
     transparencyScore === null
       ? "#9e9e9e"
       : transparencyScore >= 70
-      ? "#4caf50"
+      ? "#0a6e34"
       : transparencyScore >= 40
       ? "#ff9800"
       : "#f44336";
@@ -256,7 +256,7 @@ export function MarketCard({
 
         <Badge
           className="absolute top-3 right-3 text-white font-bold shadow-lg"
-          style={{ backgroundColor: market.isOpen ? '#4caf50' : '#f44336' }}
+          style={{ backgroundColor: market.isOpen ? '#0a6e34' : '#f44336' }}
         >
           {market.isOpen ? 'ABIERTO' : 'CERRADO'}
         </Badge>
