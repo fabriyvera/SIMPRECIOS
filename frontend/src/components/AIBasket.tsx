@@ -88,22 +88,38 @@ export function AIBasket({ markets }: AIBasketProps) {
 
       for (const essential of filteredEssentials) {
         const quantity = Math.ceil(essential.baseQty * scaleFactor);
-        let bestMarket: Market | null = null;
-        let bestPrice = essential.basePrice;
         
-        for (const market of markets) {
-          const product = market.products.find((p) => p.name === essential.name);
-          if (product?.available && product.price <= bestPrice) {
-            bestPrice = product.price;
-            bestMarket = market;
+        // 1. Definimos un "Mercado Base" por si la BD falla o no tiene el producto
+        let bestPrice = essential.basePrice;
+        let bestMarketName = "Mercado Promedio"; 
+        let bestMarketColor = "#9CA3AF"; // Color gris neutro
+
+        // 2. Buscamos en los mercados de la BD a ver si hay una mejor oferta
+        if (markets && markets.length > 0) {
+          for (const market of markets) {
+            const product = market.products?.find((p) => p.name === essential.name);
+            if (product?.available && product.price <= bestPrice) {
+              bestPrice = product.price;
+              bestMarketName = market.name;
+              bestMarketColor = market.color || "#9333ea";
+            }
           }
         }
         
         const totalPrice = quantity * bestPrice;
         requiredCost += totalPrice;
 
-        if (bestMarket && remainingBudget >= totalPrice) {
-          basket.push({ productName: essential.name, quantity, unitPrice: bestPrice, totalPrice, marketName: bestMarket.name, marketColor: bestMarket.color, category: essential.category });
+        // 3. QUITAMOS la restricción de "bestMarket". Ahora siempre inserta si hay dinero.
+        if (remainingBudget >= totalPrice) {
+          basket.push({ 
+            productName: essential.name, 
+            quantity, 
+            unitPrice: bestPrice, 
+            totalPrice, 
+            marketName: bestMarketName, 
+            marketColor: bestMarketColor, 
+            category: essential.category 
+          });
           remainingBudget -= totalPrice;
         }
       }
