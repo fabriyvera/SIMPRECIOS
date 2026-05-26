@@ -1,10 +1,11 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import Link from "next/link";
 import { Home, MapPin, Sparkles, Store } from "lucide-react";
 import { Avatar } from "@/components/ui/avatar";
 import { AppView } from "@/types";
+import { createClient } from '@/utils/supabase/client';
 
 interface NavbarProps {
   currentView: AppView;
@@ -22,12 +23,49 @@ export function Navbar({
   onToggleVendorMode,
 }: NavbarProps) {
   const [isLoggedIn, setIsLoggedIn] = useState(false);
+  const [userName, setUserName] = useState("");
+  const [userInitial, setUserInitial] = useState("");
+  
+  const supabase = createClient();
   const navItems = [
     { id: "home" as const, icon: Home, label: "Inicio" },
     { id: "map" as const, icon: MapPin, label: "Buscar" },
     { id: "ai" as const, icon: Sparkles, label: "IA" },
     { id: "vendor" as const, icon: Store, label: "Vendedor" },
   ];
+  useEffect(() => {
+    const fetchSession = async () => {
+      const { data: { session } } = await supabase.auth.getSession();
+      if (session) {
+        setIsLoggedIn(true);
+        const name = session.user.user_metadata?.nombre_completo || "Usuario";
+        setUserName(name);
+        setUserInitial(name.charAt(0).toUpperCase());
+      }
+    };
+    fetchSession();
+
+    const { data: { subscription } } = supabase.auth.onAuthStateChange((_event, session) => {
+      if (session) {
+        setIsLoggedIn(true);
+        const name = session.user.user_metadata?.nombre_completo || "Usuario";
+        setUserName(name);
+        setUserInitial(name.charAt(0).toUpperCase());
+      } else {
+        setIsLoggedIn(false);
+        setUserName("");
+        setUserInitial("");
+      }
+    });
+
+    return () => subscription.unsubscribe();
+  }, [supabase]);
+
+  const handleLogout = async () => {
+    await supabase.auth.signOut();
+    setIsLoggedIn(false);
+    onViewChange("home"); 
+  };
 
   return (
     <>
@@ -50,12 +88,12 @@ export function Navbar({
             <div className="relative group">
               <button className="flex items-center gap-2 bg-white/20 hover:bg-white/30 transition-colors rounded-full pl-2 pr-1 py-1 backdrop-blur-sm cursor-pointer">
                 <span className="text-xs font-bold text-white hidden sm:block">
-                  {currentUser.name}
+                  {userName}
                 </span>
                 <Avatar className="w-8 h-8 border-2 border-white shadow-lg">
                   <div className="w-full h-full bg-gradient-to-br from-yellow-400 to-orange-500 flex items-center justify-center">
                     <span className="text-xs font-bold text-white">
-                      {currentUser.avatar}
+                      {userInitial}
                     </span>
                   </div>
                 </Avatar>
@@ -70,7 +108,7 @@ export function Navbar({
                   Mi Perfil
                 </button>
                 <button
-                  onClick={() => setIsLoggedIn(false)}
+                  onClick={handleLogout}
                   className="block w-full text-left px-4 py-2 text-sm font-medium text-red-600 hover:bg-red-50 transition-colors"
                 >
                   Cerrar Sesión
@@ -79,13 +117,6 @@ export function Navbar({
             </div>
           ) : (
             <div className="flex items-center gap-3">
-              {/* Botón temporal para probar el perfil (sin anidar) */}
-              <button
-                onClick={() => onViewChange("perfil")}
-                className="text-sm font-extrabold text-orange-200 hover:text-pink-300 transition-colors"
-              >
-                Mi Perfil (Prueba)
-              </button>
               <button
                 onClick={() => onViewChange("login" as AppView)}
                 className="text-xs font-bold text-white hover:text-white/80 transition-colors drop-shadow-md cursor-pointer"
