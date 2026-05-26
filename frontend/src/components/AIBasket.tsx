@@ -148,7 +148,7 @@ export function AIBasket({ markets }: AIBasketProps) {
       const supabase = createClient();
 
       // Pegas el ID largo que copiaste de Supabase justo aquí:
-      const usuarioIdPrueba = "0511f871-0c1c-47b1-bb77-49717568807e"; // <--- Tu ID real sin los "..."
+      const usuarioIdPrueba = "31c3b38e-6c7b-4876-bedf-a46fe1d654ef"; 
 
       const { data, error } = await supabase
         .from('canastas_favoritas')
