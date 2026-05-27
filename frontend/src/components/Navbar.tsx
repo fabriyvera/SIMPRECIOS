@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef } from "react";
 import Link from "next/link";
 import { Home, MapPin, Sparkles, Store } from "lucide-react";
 import { Avatar } from "@/components/ui/avatar";
@@ -26,6 +26,10 @@ export function Navbar({
   const [userName, setUserName] = useState("");
   const [userInitial, setUserInitial] = useState("");
   
+  // INYECCIÓN DE ALEXIA: Estado para controlar si el menú está abierto o cerrado firmemente
+  const [isMenuOpen, setIsMenuOpen] = useState(false);
+  const menuRef = useRef<HTMLDivElement>(null);
+
   const supabase = createClient();
   const navItems = [
     { id: "home" as const, icon: Home, label: "Inicio" },
@@ -33,6 +37,7 @@ export function Navbar({
     { id: "ai" as const, icon: Sparkles, label: "IA" },
     { id: "vendor" as const, icon: Store, label: "Vendedor" },
   ];
+
   useEffect(() => {
     const fetchSession = async () => {
       const { data: { session } } = await supabase.auth.getSession();
@@ -61,10 +66,27 @@ export function Navbar({
     return () => subscription.unsubscribe();
   }, [supabase]);
 
+  // INYECCIÓN DE ALEXIA: Cerrar el menú si el usuario hace clic afuera de él
+  useEffect(() => {
+    const handleClickOutside = (event: MouseEvent) => {
+      if (menuRef.current && !menuRef.current.contains(event.target as Node)) {
+        setIsMenuOpen(false);
+      }
+    };
+    document.addEventListener("mousedown", handleClickOutside);
+    return () => document.removeEventListener("mousedown", handleClickOutside);
+  }, []);
+
   const handleLogout = async () => {
     await supabase.auth.signOut();
     setIsLoggedIn(false);
+    setIsMenuOpen(false); // Cerramos el menú al salir
     onViewChange("home"); 
+  };
+
+  const handleProfileClick = () => {
+    setIsMenuOpen(false); // Cerramos el menú al ir al perfil
+    onViewChange("perfil" as AppView);
   };
 
   return (
@@ -85,8 +107,12 @@ export function Navbar({
 
           {/* INICIO MÓDULO DE GESTIÓN DE USUARIOS */}
           {isLoggedIn ? (
-            <div className="relative group">
-              <button className="flex items-center gap-2 bg-white/20 hover:bg-white/30 transition-colors rounded-full pl-2 pr-1 py-1 backdrop-blur-sm cursor-pointer">
+            // Agregamos el ref aquí para detectar clics fuera del menú
+            <div className="relative" ref={menuRef}> 
+              <button 
+                onClick={() => setIsMenuOpen(!isMenuOpen)} // El botón ahora controla el estado
+                className="flex items-center gap-2 bg-white/20 hover:bg-white/30 transition-colors rounded-full pl-2 pr-1 py-1 backdrop-blur-sm cursor-pointer"
+              >
                 <span className="text-xs font-bold text-white hidden sm:block">
                   {userName}
                 </span>
@@ -99,21 +125,22 @@ export function Navbar({
                 </Avatar>
               </button>
 
-              {/* Menú Desplegable */}
-              <div className="absolute right-0 mt-2 w-40 bg-white rounded-md shadow-xl py-1 z-50 hidden group-hover:block border border-gray-100">
-                <button
-                  onClick={() => onViewChange("perfil" as AppView)}
-                  className="block w-full text-left px-4 py-2 text-sm font-medium text-gray-700 hover:bg-orange-50 hover:text-orange-600 transition-colors"
-                >
-                  Mi Perfil
-                </button>
-                <button
-                  onClick={handleLogout}
-                  className="block w-full text-left px-4 py-2 text-sm font-medium text-red-600 hover:bg-red-50 transition-colors"
-                >
-                  Cerrar Sesión
-                </button>
-              </div>
+              {isMenuOpen && (
+                <div className="absolute right-0 mt-2 w-40 bg-white rounded-md shadow-xl py-1 z-50 border border-gray-100 animate-in fade-in slide-in-from-top-2 duration-200">
+                  <button
+                    onClick={handleProfileClick}
+                    className="block w-full text-left px-4 py-2 text-sm font-medium text-gray-700 hover:bg-orange-50 hover:text-orange-600 transition-colors"
+                  >
+                    Mi Perfil
+                  </button>
+                  <button
+                    onClick={handleLogout}
+                    className="block w-full text-left px-4 py-2 text-sm font-medium text-red-600 hover:bg-red-50 transition-colors"
+                  >
+                    Cerrar Sesión
+                  </button>
+                </div>
+              )}
             </div>
           ) : (
             <div className="flex items-center gap-3">
