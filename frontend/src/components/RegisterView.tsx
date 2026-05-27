@@ -33,14 +33,13 @@ export function RegisterView({ onViewChange }: RegisterViewProps) {
 
     console.log('Iniciando registro con pura alexia...');
 
-    const { error: authError } = await supabase.auth.signUp({
+    const { data: authData, error: authError } = await supabase.auth.signUp({
       email: email, 
       password: password,
       options: {
         data: {
           nombre_completo: name,
-          telefono: email,
-          rol: role === 'comprador' ? 'Comprador' : 'Vendedora',
+          rol: role === 'comprador' ? 'comprador' : 'caserita',
         }
       }
     });
@@ -49,7 +48,23 @@ export function RegisterView({ onViewChange }: RegisterViewProps) {
       alert('❌ Error al registrar la cuenta: ' + authError.message);
       return;
     }
-    alert('✅ ¡Registro exitoso! Revisa tu correo o inicia sesión.');
+
+    if (authData.user) {
+      const { error: profileError } = await supabase
+        .from('profiles')
+        .insert({
+          id: authData.user.id, 
+          nombre_completo: name,
+          rol: role === 'comprador' ? 'comprador' : 'caserita',
+          es_verificado: false,
+        });
+
+      if (profileError) {
+         console.error("Error al crear el perfil público:", profileError);
+      }
+    }
+
+    alert('✅ ¡Registro exitoso! Ya puedes iniciar sesión.');
     onViewChange('login'); 
   };
 
@@ -89,8 +104,8 @@ export function RegisterView({ onViewChange }: RegisterViewProps) {
           </div>
 
           <div>
-            <label className="block text-sm font-bold text-gray-700 mb-1">Correo o Teléfono</label>
-            <input type="text" value={email} onChange={(e) => setEmail(e.target.value)} required className="w-full px-4 py-3 border border-gray-200 rounded-xl focus:ring-2 focus:ring-orange-500 focus:border-orange-500 outline-none transition-all bg-gray-50 focus:bg-white" />
+            <label className="block text-sm font-bold text-gray-700 mb-1">Correo Electrónico</label>
+            <input type="email" value={email} onChange={(e) => setEmail(e.target.value)} required className="w-full px-4 py-3 border border-gray-200 rounded-xl focus:ring-2 focus:ring-orange-500 focus:border-orange-500 outline-none transition-all bg-gray-50 focus:bg-white" placeholder="ejemplo@correo.com" />
           </div>
           
           {role === 'vendedora' && (
