@@ -2,7 +2,7 @@
 
 import { useState, useEffect } from "react";
 import { Market, PriceHistory } from "@/types"; 
-import { AlertTriangle, Package, Edit2, Save, X, Plus } from "lucide-react";
+import { AlertTriangle, Package, Edit2, Save, X, Plus, Trash2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -19,6 +19,7 @@ interface VendorDashboardProps {
   onRegisterProduct: (productName: string, price: number) => void;
   onToggleStock: (productId: string) => void;
   onNotifyStock: (productId: string) => void;
+  onDeleteProduct?: (productId: string) => void; // 🌟 Punto 4: Prop opcional para sincronizar borrado con el padre
   priceHistory: Record<string, PriceHistory[]>;
   averagePrices: Record<string, number>;
   referencePrices: Record<string, number>;
@@ -31,6 +32,7 @@ export function VendorDashboard({
   onRegisterProduct,
   onToggleStock,
   onNotifyStock,
+  onDeleteProduct,
   priceHistory,
   averagePrices,
   referencePrices
@@ -54,7 +56,6 @@ export function VendorDashboard({
     
     if (!isNaN(price) && price > 0) {
       try {
-        // Limpiamos el ID del producto dejando solo los dígitos numéricos reales
         const idLimpio = productId.replace(/\D/g, ""); 
         const productoIdFinal = idLimpio ? parseInt(idLimpio, 10) : parseInt(productId, 10);
 
@@ -63,12 +64,11 @@ export function VendorDashboard({
           return;
         }
 
-        // 🎯 CONSTRUIMOS EL PAYLOAD EXACTO QUE EXIGE TU BACKEND
         const bodyPayload = {
           puesto_id: parseInt(market.id, 10),
-          producto_id: productoIdFinal,       
+          producto_id: productoIdFinal,      
           precio_actual: price,
-          nombre_producto: productName // 🌟 ¡Aquí está el campo obligatorio que faltaba!
+          nombre_producto: productName 
         };
 
         const response = await fetch("http://localhost:8000/api/prices/update", {
@@ -86,7 +86,6 @@ export function VendorDashboard({
           throw new Error(mensajeError || "Error de validación en FastAPI");
         }
 
-        // Sincronización de estados locales si responde 200 OK
         onUpdatePrice(productId, price);
         setLocalProducts(prev => 
           prev.map(p => p.id === productId ? { ...p, price } : p)
@@ -94,7 +93,6 @@ export function VendorDashboard({
         setEditingProduct(null);
         setNewPrice("");
         
-        // 🔔 TOAST DE ÉXITO FLOTANTE (Idéntico al de registro)
         toast.success("✅ Precio actualizado correctamente", {
           description: `${productName} ahora cuesta Bs. ${price.toFixed(2)}`,
           duration: 4000,
@@ -109,9 +107,64 @@ export function VendorDashboard({
     }
   };
 
+  // ── 🎯 ELIMINACIÓN SEGURA PASANDO PUESTO Y PRODUCTO ──
+  const handleDeleteProductClick = async (productId: string, productName: string) => {
+    try {
+      const idLimpio = productId.replace(/\D/g, ""); 
+      const productoIdFinal = idLimpio ? parseInt(idLimpio, 10) : parseInt(productId, 10);
+
+      if (isNaN(productoIdFinal)) {
+        toast.error("ID de producto inválido para eliminar");
+        return;
+      }
+
+      
+      const response = await fetch(`http://localhost:8000/api/prices/${market.id}/${productoIdFinal}`, {
+        method: "DELETE",
+        headers: { "Content-Type": "application/json" }
+      });
+
+      if (!response.ok) {
+        throw new Error("No se pudo eliminar el producto del servidor");
+      }
+
+      // Descontar del estado local inmediatamente
+      setLocalProducts(prev => prev.filter(p => p.id !== productId));
+      
+      if (onDeleteProduct) {
+        onDeleteProduct(productId);
+      }
+
+      toast.success("🗑️ Producto eliminado", {
+        description: `${productName} fue removido de tu inventario con éxito.`,
+        duration: 3000,
+      });
+
+    } catch (e: any) {
+      console.error("🚨 Error al eliminar producto:", e.message);
+      toast.error("🚨 Error al intentar eliminar el producto en el servidor");
+    }
+  };
+  // ── 🎯 PUNTO 3: NOTIFICACIÓN DE ESCASEZ / AGOTADO REAL ──
+  const handleLocalNotifyStock = async (productId: string, productName: string) => {
+    try {
+      // 1. Forzar el estado de disponible a false para que la vista de usuario lo renderice como 'Agotado'
+      setLocalProducts(prev => prev.map(p => p.id === productId ? { ...p, available: false } : p));
+      
+      // 2. Ejecutar la acción del componente superior para persistir en cascada
+      onNotifyStock(productId);
+      
+      toast.warning("📢 Alerta de desabastecimiento enviada", {
+        description: `${productName} marcado como agotado para los usuarios.`,
+        duration: 4000,
+      });
+    } catch (e) {
+      console.error("Error al despachar notificación de stock:", e);
+    }
+  };
+
   // REGISTRO TOTALMENTE CONTROLADO E INDEPENDIENTE
   const handleDashboardRegister = (productName: string, price: number) => {
-    // 1. Crear el producto estructurado
     const newProduct = {
       id: crypto.randomUUID(), 
       name: productName,
@@ -119,17 +172,14 @@ export function VendorDashboard({
       available: true
     };
 
-    // 2. Insertarlo localmente primero para saltearnos cualquier bug del padre
     setLocalProducts(prev => [...prev, newProduct]);
 
-    // 3. Mandar los datos al backend/padre de fondo
     try {
       onRegisterProduct(productName, price);
     } catch (e) {
       console.error("El componente padre falló al guardar en BD:", e);
     }
 
-    // 4. Mostrar el Toast de Sonner con los datos reales
     toast.success("✅ Producto registrado correctamente", {
       description: `${productName} - Bs. ${price.toFixed(2)}`,
       duration: 4000,
@@ -137,114 +187,100 @@ export function VendorDashboard({
   };
 
   // ── SISTEMA DE ALERTAS UNIFICADO Y CORREGIDO ──
-  // ── IDENTIFICACIÓN DIRECTA POR NOMBRE ──
- const calculatePriceAlert = (product: any) => {
-  const currentPrice = product.price;
-  const nameLimpio = product.name.toLowerCase().trim();
-  
-  // Lista de precios referenciales oficiales de la Alcaldía (Bs.)
-  let refPrice = currentPrice; 
+  const calculatePriceAlert = (product: any) => {
+    const currentPrice = product.price;
+    const nameLimpio = product.name.toLowerCase().trim();
+    
+    let refPrice = currentPrice; 
 
-  // ── CATEGORÍA: AVES (POLLO) ─────────────────────────────────────────
-  if (nameLimpio.includes("pollo entero") || nameLimpio.includes("pollo kilo")) {
-    refPrice = 16.50; 
-  } else if (nameLimpio.includes("pechuga de pollo") || nameLimpio.includes("pechuga")) {
-    refPrice = 26.00;
-  } else if (nameLimpio.includes("pierna de pollo") || nameLimpio.includes("pierna") || nameLimpio.includes("muslo")) {
-    refPrice = 19.00;
-  } else if (nameLimpio.includes("alitas de pollo") || nameLimpio.includes("alitas")) {
-    refPrice = 17.00;
+    if (nameLimpio.includes("pollo entero") || nameLimpio.includes("pollo kilo")) {
+      refPrice = 16.50; 
+    } else if (nameLimpio.includes("pechuga de pollo") || nameLimpio.includes("pechuga")) {
+      refPrice = 26.00;
+    } else if (nameLimpio.includes("pierna de pollo") || nameLimpio.includes("pierna") || nameLimpio.includes("muslo")) {
+      refPrice = 19.00;
+    } else if (nameLimpio.includes("alitas de pollo") || nameLimpio.includes("alitas")) {
+      refPrice = 17.00;
+    } else if (nameLimpio.includes("carne molida") || nameLimpio.includes("molida")) {
+      refPrice = 28.00;
+    } else if (nameLimpio.includes("pulpa de res") || nameLimpio.includes("pulpa")) {
+      refPrice = 42.00;
+    } else if (nameLimpio.includes("chuleta de res") || nameLimpio.includes("chuleta")) {
+      refPrice = 32.00;
+    } else if (nameLimpio.includes("costilla de res") || nameLimpio.includes("costilla")) {
+      refPrice = 26.00;
+    } else if (nameLimpio.includes("lomo de res") || nameLimpio.includes("lomo")) {
+      refPrice = 45.00;
+    } else if (nameLimpio.includes("chuleta de cerdo") || nameLimpio.includes("cerdo chuleta")) {
+      refPrice = 28.00;
+    } else if (nameLimpio.includes("costilla de cerdo") || nameLimpio.includes("lechón") || nameLimpio.includes("lechon")) {
+      refPrice = 30.00;
+    } else if (nameLimpio.includes("pierna de cerdo")) {
+      refPrice = 25.00;
+    } else if (nameLimpio.includes("trucha")) {
+      refPrice = 35.00; 
+    } else if (nameLimpio.includes("sábalo") || nameLimpio.includes("sabalo")) {
+      refPrice = 25.00; 
+    } else if (nameLimpio.includes("pejerrey")) {
+      refPrice = 40.00;
+    } else if (nameLimpio.includes("apio")) {
+      refPrice = 3.50;
+    } else if (nameLimpio.includes("choclo")) {
+      refPrice = 5.00;
+    } else if (nameLimpio.includes("tomate")) {
+      refPrice = 6.00;
+    } else if (nameLimpio.includes("zanahoria")) {
+      refPrice = 4.00;
+    } else if (nameLimpio.includes("cebolla")) {
+      refPrice = 5.00;
+    } else if (nameLimpio.includes("papa")) {
+      refPrice = 45.00; 
+    } else if (nameLimpio.includes("lechuga")) {
+      refPrice = 3.00;
+    } else if (nameLimpio.includes("morron") || nameLimpio.includes("pimenton") || nameLimpio.includes("pimentón")) {
+      refPrice = 2.50;
+    } else if (nameLimpio.includes("arveja")) {
+      refPrice = 7.00;
+    } else if (nameLimpio.includes("espinaca")) {
+      refPrice = 3.50;
+    } else if (nameLimpio.includes("vainita")) {
+      refPrice = 5.00;
+    } else if (nameLimpio.includes("brocoli") || nameLimpio.includes("brócoli")) {
+      refPrice = 7.50;
+    } else if (nameLimpio.includes("locoto")) {
+      refPrice = 6.00;
+    } else if (nameLimpio.includes("camote")) {
+      refPrice = 5.00;
+    } else if (nameLimpio.includes("yuca")) {
+      refPrice = 6.00;
+    } else if (nameLimpio.includes("chuño") || nameLimpio.includes("chuñito") || nameLimpio.includes("Chuño")) {
+      refPrice = 46.00;
+    } else if (nameLimpio.includes("platano") || nameLimpio.includes("plátano") || nameLimpio.includes("banano")) {
+      refPrice = 4.00;
+    } else if (nameLimpio.includes("manzana")) {
+      refPrice = 2.00;
+    } else if (nameLimpio.includes("naranja")) {
+      refPrice = 0.80;
+    } else if (nameLimpio.includes("mandarina")) {
+      refPrice = 0.70; 
+    } else if (nameLimpio.includes("papaya")) {
+      refPrice = 8.00;
+    } else if (nameLimpio.includes("frutilla")) {
+      refPrice = 15.00;
+    } else if (nameLimpio.includes("piña") || nameLimpio.includes("pina")) {
+      refPrice = 10.00;
+    } else if (nameLimpio.includes("palta")) {
+      refPrice = 5.00;
+    }
 
-  // ── CATEGORÍA: CARNES DE RES ────────────────────────────────────────
-  } else if (nameLimpio.includes("carne molida") || nameLimpio.includes("molida")) {
-    refPrice = 28.00;
-  } else if (nameLimpio.includes("pulpa de res") || nameLimpio.includes("pulpa")) {
-    refPrice = 42.00;
-  } else if (nameLimpio.includes("chuleta de res") || nameLimpio.includes("chuleta")) {
-    refPrice = 32.00;
-  } else if (nameLimpio.includes("costilla de res") || nameLimpio.includes("costilla")) {
-    refPrice = 26.00;
-  } else if (nameLimpio.includes("lomo de res") || nameLimpio.includes("lomo")) {
-    refPrice = 45.00;
-
-  // ── CATEGORÍA: CARNE DE CERDO ───────────────────────────────────────
-  } else if (nameLimpio.includes("chuleta de cerdo") || nameLimpio.includes("cerdo chuleta")) {
-    refPrice = 28.00;
-  } else if (nameLimpio.includes("costilla de cerdo") || nameLimpio.includes("lechón") || nameLimpio.includes("lechon")) {
-    refPrice = 30.00;
-  } else if (nameLimpio.includes("pierna de cerdo")) {
-    refPrice = 25.00;
-
-  // ── CATEGORÍA: PESCADOS ─────────────────────────────────────────────
-  } else if (nameLimpio.includes("trucha")) {
-    refPrice = 35.00; 
-  } else if (nameLimpio.includes("sábalo") || nameLimpio.includes("sabalo")) {
-    refPrice = 25.00; 
-  } else if (nameLimpio.includes("pejerrey")) {
-    refPrice = 40.00;
-
-  // ── CATEGORÍA: VERDURAS Y TUBÉRCULOS ────────────────────────────────
-  } else if (nameLimpio.includes("apio")) {
-    refPrice = 3.50;
-  } else if (nameLimpio.includes("choclo")) {
-    refPrice = 5.00;
-  } else if (nameLimpio.includes("tomate")) {
-    refPrice = 6.00;
-  } else if (nameLimpio.includes("zanahoria")) {
-    refPrice = 4.00;
-  } else if (nameLimpio.includes("cebolla")) {
-    refPrice = 5.00;
-  } else if (nameLimpio.includes("papa")) {
-    refPrice = 45.00; 
-  } else if (nameLimpio.includes("lechuga")) {
-    refPrice = 3.00;
-  } else if (nameLimpio.includes("morron") || nameLimpio.includes("pimenton") || nameLimpio.includes("pimentón")) {
-    refPrice = 2.50;
-  } else if (nameLimpio.includes("arveja")) {
-    refPrice = 7.00;
-  } else if (nameLimpio.includes("espinaca")) {
-    refPrice = 3.50;
-  } else if (nameLimpio.includes("vainita")) {
-    refPrice = 5.00;
-  } else if (nameLimpio.includes("brocoli") || nameLimpio.includes("brócoli")) {
-    refPrice = 7.50;
-  } else if (nameLimpio.includes("locoto")) {
-    refPrice = 6.00;
-  } else if (nameLimpio.includes("camote")) {
-    refPrice = 5.00;
-  } else if (nameLimpio.includes("yuca")) {
-    refPrice = 6.00;
-  } else if (nameLimpio.includes("Chuño")) {
-    refPrice = 46.00;
-
-  // ── CATEGORÍA: FRUTAS ───────────────────────────────────────────────
-  } else if (nameLimpio.includes("platano") || nameLimpio.includes("plátano") || nameLimpio.includes("banano")) {
-    refPrice = 4.00; // Por unidad o promedio por unidad en amarro
-  } else if (nameLimpio.includes("manzana")) {
-    refPrice = 2.00; // Por unidad
-  } else if (nameLimpio.includes("naranja")) {
-    refPrice = 0.80; // Promedio por unidad en 25 de naranjas
-  } else if (nameLimpio.includes("mandarina")) {
-    refPrice = 0.70; 
-  } else if (nameLimpio.includes("papaya")) {
-    refPrice = 8.00; // Por unidad mediana
-  } else if (nameLimpio.includes("frutilla")) {
-    refPrice = 15.00; // Por kilo o cuarta
-  } else if (nameLimpio.includes("piña") || nameLimpio.includes("pina")) {
-    refPrice = 10.00; // Por unidad
-  } else if (nameLimpio.includes("palta")) {
-    refPrice = 5.00; // Por unidad mediana
-  }
-
-  // Cálculo de la desviación porcentual
-  const difference = refPrice > 0 ? ((currentPrice - refPrice) / refPrice) * 100 : 0;
-  
-  return {
-    isOverpriced: difference > 10, 
-    difference: difference.toFixed(1),
-    refPriceFinal: refPrice
+    const difference = refPrice > 0 ? ((currentPrice - refPrice) / refPrice) * 100 : 0;
+    
+    return {
+      isOverpriced: difference > 10, 
+      difference: difference.toFixed(1),
+      refPriceFinal: refPrice
+    };
   };
-};
 
   const getLowStockProducts = () => localProducts.filter(p => !p.available);
 
@@ -310,7 +346,7 @@ export function VendorDashboard({
         </div>
       )}
 
-      {/* Gestión de Precios usando localProducts */}
+      {/* Gestión de Precios */}
       <div className="bg-white rounded-xl shadow-lg p-6">
         <h3 className="text-xl font-bold mb-4 flex items-center gap-2">
           <Edit2 className="w-5 h-5 text-blue-600" />
@@ -318,7 +354,6 @@ export function VendorDashboard({
         </h3>
         <div className="space-y-3">
           {localProducts.map(product => {
-            // Pasamos el producto completo para evaluar su refPrice de la BD
             const alert = calculatePriceAlert(product);
             const isEditing = editingProduct === product.id;
             const refPrice = alert.refPriceFinal;
@@ -371,7 +406,9 @@ export function VendorDashboard({
                       )}
                     </div>
                   </div>
-                  <div className="flex gap-2">
+                  
+                  {/* 📦 BOTONERÍA CONFIGURADA CON BORRAR (PUNTO 4) */}
+                  <div className="flex gap-2 items-center">
                     {isEditing ? (
                       <>
                         <Button
@@ -394,17 +431,30 @@ export function VendorDashboard({
                         </Button>
                       </>
                     ) : (
-                      <Button
-                        size="sm"
-                        onClick={() => {
-                          setEditingProduct(product.id);
-                          setNewPrice(product.price.toString());
-                        }}
-                        style={{ backgroundColor: market.color }}
-                      >
-                        <Edit2 className="w-4 h-4 mr-1" />
-                        Actualizar
-                      </Button>
+                      <>
+                        <Button
+                          size="sm"
+                          onClick={() => {
+                            setEditingProduct(product.id);
+                            setNewPrice(product.price.toString());
+                          }}
+                          style={{ backgroundColor: market.color }}
+                        >
+                          <Edit2 className="w-4 h-4 mr-1" />
+                          Actualizar
+                        </Button>
+                        
+                        {/* 🗑️ BOTÓN ELIMINAR AGREGADO AL LADO DE ACTUALIZAR */}
+                        <Button
+                          size="sm"
+                          variant="destructive"
+                          onClick={() => handleDeleteProductClick(product.id, product.name)}
+                          className="bg-red-600 hover:bg-red-700"
+                          title="Eliminar producto por completo"
+                        >
+                          <Trash2 className="w-4 h-4" />
+                        </Button>
+                      </>
                     )}
                   </div>
                 </div>
@@ -420,7 +470,10 @@ export function VendorDashboard({
           onToggleStock(id);
           setLocalProducts(prev => prev.map(p => p.id === id ? { ...p, available: !p.available } : p));
         }} 
-        onNotifyStock={onNotifyStock} 
+        onNotifyStock={(id) => {
+          const prod = localProducts.find(p => p.id === id);
+          handleLocalNotifyStock(id, prod ? prod.name : "Producto");
+        }} 
         marketColor={market.color} 
       />
 
