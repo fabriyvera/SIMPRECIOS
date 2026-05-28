@@ -18,6 +18,8 @@ interface MarketGridProps {
   sortBy: string;
   userId?: string;
   userRole?: 'Vendedora' | 'Comprador';
+  calificacionesPorPuesto?: Record<string, number>;
+  onCalificacionChanged?: () => void;
 }
 
 export function MarketGrid({
@@ -34,6 +36,8 @@ export function MarketGrid({
   sortBy,
   userId,
   userRole = 'Comprador',
+  calificacionesPorPuesto = {},
+  onCalificacionChanged,
 }: MarketGridProps) {
   if (markets.length === 0) {
     return (
@@ -107,6 +111,8 @@ export function MarketGrid({
           onReportOverprice={onReportOverprice}
           userId={userId}
           userRole={userRole}
+          calificacionesPorPuesto={calificacionesPorPuesto}
+          onCalificacionChanged={onCalificacionChanged}
         />
       ))}
     </div>

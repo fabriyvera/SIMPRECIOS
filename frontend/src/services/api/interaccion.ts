@@ -68,6 +68,23 @@ export interface ListaFavoritosResponse {
   favoritos: FavoritoResponse[];
 }
 
+export interface InteraccionResponse {
+  tipo: string; // 'calificacion' o 'denuncia'
+  interaccion_id: number;
+  puesto_id: number;
+  usuario_id: string;
+  puntuacion?: number; // Solo para calificaciones
+  texto: string; // comentario para calificaciones, motivo para denuncias
+  fecha: string;
+  precio_detectado?: number; // Solo para denuncias
+  estado?: string; // Solo para denuncias
+}
+
+export interface ListaInteraccionesResponse {
+  total: number;
+  interacciones: InteraccionResponse[];
+}
+
 // Calificaciones
 export async function calificarPuesto(
   puestoId: string,
@@ -129,6 +146,26 @@ export async function listarFavoritos(
 ): Promise<ListaFavoritosResponse> {
   return apiClient.get<ListaFavoritosResponse>(
     API.ENDPOINTS.LISTAR_FAVORITOS,
+    {
+      params: { usuario_id: usuarioId }
+    }
+  );
+}
+
+// Interacciones
+export async function obtenerInteraccionesPuesto(
+  puestoId: string
+): Promise<ListaInteraccionesResponse> {
+  return apiClient.get<ListaInteraccionesResponse>(
+    API.ENDPOINTS.OBTENER_INTERACCIONES_PUESTO.replace('{puesto_id}', puestoId)
+  );
+}
+
+export async function obtenerInteraccionesUsuario(
+  usuarioId: string
+): Promise<ListaInteraccionesResponse> {
+  return apiClient.get<ListaInteraccionesResponse>(
+    API.ENDPOINTS.OBTENER_INTERACCIONES_USUARIO,
     {
       params: { usuario_id: usuarioId }
     }

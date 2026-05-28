@@ -37,8 +37,8 @@ interface HomeClientProps {
 
 export default function HomeClient({ initialMarkets }: HomeClientProps) {
   const [currentUser] = useState({
-    name: "Juan Pérez",
-    avatar: "JP",
+    name: "Juana Quispe",
+    avatar: "JQ",
     isVendor: true,
   });
 
@@ -48,73 +48,78 @@ export default function HomeClient({ initialMarkets }: HomeClientProps) {
   );
   const [initialLoadComplete, setInitialLoadComplete] = useState(false);
 
-useEffect(() => {
-  const supabase = createClient();
+  useEffect(() => {
+    const supabase = createClient();
 
-  const getAuthUser = async () => {
-    const { data: { session } } = await supabase.auth.getSession();
-    if (session?.user) {
-      const userId = session.user.id;
-      const { data: profile, error } = await supabase
-        .from('profiles')
-        .select('rol, nombre_completo')
-        .eq('id', userId)
-        .maybeSingle();
-
-      if (error) console.error("Error perfil:", error);
-      if (profile) {
-        setSessionUser({
-          id: userId,
-          email: session.user.email || '',
-          rol: profile.rol,
-          user_metadata: { full_name: profile.nombre_completo },
-        });
-        setUserRole(profile.rol);
-      } else {
-        // Crear perfil por si no existe
-        const { data: newProfile } = await supabase
-          .from('profiles')
-          .insert({
-            id: userId,
-            nombre_completo: session.user.user_metadata?.nombre_completo || session.user.email,
-            rol: 'Comprador',
-          })
-          .select()
+    const getAuthUser = async () => {
+      const {
+        data: { session },
+      } = await supabase.auth.getSession();
+      if (session?.user) {
+        const userId = session.user.id;
+        const { data: profile, error } = await supabase
+          .from("profiles")
+          .select("rol, nombre_completo")
+          .eq("id", userId)
           .maybeSingle();
-        if (newProfile) {
+
+        if (error) console.error("Error perfil:", error);
+        if (profile) {
           setSessionUser({
             id: userId,
-            email: session.user.email || '',
-            rol: newProfile.rol,
-            user_metadata: { full_name: newProfile.nombre_completo },
+            email: session.user.email || "",
+            rol: profile.rol,
+            user_metadata: { full_name: profile.nombre_completo },
           });
-          setUserRole(newProfile.rol);
+          setUserRole(profile.rol);
+        } else {
+          // Crear perfil por si no existe
+          const { data: newProfile } = await supabase
+            .from("profiles")
+            .insert({
+              id: userId,
+              nombre_completo:
+                session.user.user_metadata?.nombre_completo ||
+                session.user.email,
+              rol: "Comprador",
+            })
+            .select()
+            .maybeSingle();
+          if (newProfile) {
+            setSessionUser({
+              id: userId,
+              email: session.user.email || "",
+              rol: newProfile.rol,
+              user_metadata: { full_name: newProfile.nombre_completo },
+            });
+            setUserRole(newProfile.rol);
+          }
         }
+      } else {
+        setSessionUser(null);
+        setUserRole("Comprador");
       }
-    } else {
-      setSessionUser(null);
-      setUserRole('Comprador');
-    }
-    setInitialLoadComplete(true);
-  };
+      setInitialLoadComplete(true);
+    };
 
-  getAuthUser();
+    getAuthUser();
 
-  // Escuchar cambios en la autenticación (login/logout)
-  const { data: { subscription } } = supabase.auth.onAuthStateChange((event, session) => {
-    if (event === 'SIGNED_IN' || event === 'TOKEN_REFRESHED') {
-      getAuthUser();
-    } else if (event === 'SIGNED_OUT') {
-      setSessionUser(null);
-      setUserRole('Comprador');
-      setCurrentView('home');
-      setIsVendorMode(false);
-    }
-  });
+    // Escuchar cambios en la autenticación (login/logout)
+    const {
+      data: { subscription },
+    } = supabase.auth.onAuthStateChange((event, session) => {
+      if (event === "SIGNED_IN" || event === "TOKEN_REFRESHED") {
+        getAuthUser();
+      } else if (event === "SIGNED_OUT") {
+        setSessionUser(null);
+        setUserRole("Comprador");
+        setCurrentView("home");
+        setIsVendorMode(false);
+      }
+    });
 
-  return () => subscription.unsubscribe();
-}, []);
-
+    return () => subscription.unsubscribe();
+  }, []);
 
   const [currentView, setCurrentView] = useState<AppView>("home");
   const [isVendorMode, setIsVendorMode] = useState(false);
@@ -132,10 +137,15 @@ useEffect(() => {
   const [searchTerm, setSearchTerm] = useState("");
   const [selectedCategory, setSelectedCategory] = useState("all");
   const [selectedMarketLocation, setSelectedMarketLocation] = useState("all");
-  const [showFavoritesOnly, setShowFavoritesOnly] = useState(false);
+  const [showFavoritesFilter, setShowFavoritesFilter] = useState(false);
   const [sortBy, setSortBy] = useState("name");
   const [showOpenOnly, setShowOpenOnly] = useState(false);
   const [userLocation, setUserLocation] = useState<UserLocation | null>(null);
+
+  // Estados para calificaciones y favoritos desde backend
+  const [calificacionesPorPuesto, setCalificacionesPorPuesto] = useState<
+    Record<string, number>
+  >({});
 
   // Efecto de Geolocalización
   useEffect(() => {
@@ -181,9 +191,7 @@ useEffect(() => {
             );
 
             // Clasificación visual y estilizado para separar carnes de hortalizas
-            const esCarne = dbMarket.sector
-              ?.toLowerCase()
-              .includes("carne");
+            const esCarne = dbMarket.sector?.toLowerCase().includes("carne");
             const colorEstetico = esCarne ? "#ef4444" : "#0a6e34";
             const imagenEstetica = esCarne
               ? "https://images.unsplash.com/photo-1603048588665-791ca8aea617?w=500&auto=format&fit=crop&q=60"
@@ -195,18 +203,21 @@ useEffect(() => {
             return {
               id: dbMarket.id.toString(),
               name: dbMarket.nombre_puesto || "Puesto de Venta",
-              description:
-                (esCarne
-                  ? "Carnes frescas de primera calidad"
-                  : "Frutas y verduras frescas del productor"),
+              description: esCarne
+                ? "Carnes frescas de primera calidad"
+                : "Frutas y verduras frescas del productor",
               category: dbMarket.sector || (esCarne ? "Carnes" : "Verduras"),
               marketLocation: nombreMercado,
-              isOpen: dbMarket.esta_abierto !== undefined ? dbMarket.esta_abierto : true,
+              isOpen:
+                dbMarket.esta_abierto !== undefined
+                  ? dbMarket.esta_abierto
+                  : true,
               image: imagenEstetica,
               imageUrl: imagenEstetica,
               color: colorEstetico,
               products: productosReales,
-              rating: dbMarket.calificacion_promedio || (4.5 + ((index * 0.1) % 0.5)),
+              rating:
+                dbMarket.calificacion_promedio || 4.5 + ((index * 0.1) % 0.5),
               reviews: [],
             };
           },
@@ -221,13 +232,55 @@ useEffect(() => {
     syncWithDatabase();
   }, []);
 
-  const [favoriteMarketIds, setFavoriteMarketIds] = useState<string[]>(() => {
+  const [favoriteMarketIds, setFavoriteMarketIds] = useState<string[]>([]);
+  const [favoritesLoaded, setFavoritesLoaded] = useState(false);
+
+  // Cargar favoritos desde localStorage SOLO en el cliente
+  useEffect(() => {
     if (typeof window !== "undefined") {
       const saved = localStorage.getItem("favoriteMarkets");
-      return saved ? JSON.parse(saved) : [];
+      setFavoriteMarketIds(saved ? JSON.parse(saved) : []);
+      setFavoritesLoaded(true);
     }
-    return [];
-  });
+  }, []);
+
+  // Cargar calificaciones y favoritos del usuario desde el backend
+  const loadUserData = async () => {
+    if (!sessionUser?.id) return;
+
+    try {
+      // Cargar calificaciones
+      const calRes = await fetch(
+        `http://localhost:8000/interaccion/calificaciones?usuario_id=${sessionUser.id}`,
+      );
+      if (calRes.ok) {
+        const calData = await calRes.json();
+        const calificacionesMap: Record<string, number> = {};
+        calData.calificaciones?.forEach((cal: any) => {
+          calificacionesMap[cal.puesto_id] = cal.estrellas;
+        });
+        setCalificacionesPorPuesto(calificacionesMap);
+      }
+
+      // Cargar favoritos
+      const favRes = await fetch(
+        `http://localhost:8000/interaccion/favoritos?usuario_id=${sessionUser.id}`,
+      );
+      if (favRes.ok) {
+        const favData = await favRes.json();
+        const favIds = favData.favoritos?.map((f: any) => f.puesto_id) || [];
+        setFavoriteMarketIds(favIds);
+        // También guardar en localStorage para sincronización
+        localStorage.setItem("favoriteMarkets", JSON.stringify(favIds));
+      }
+    } catch (error) {
+      console.error("Error cargando datos del usuario:", error);
+    }
+  };
+
+  useEffect(() => {
+    loadUserData();
+  }, [sessionUser?.id]);
 
   const [overpriceReports, setOverpriceReports] = useState<any[]>([]);
 
@@ -320,10 +373,32 @@ useEffect(() => {
 
   const handleToggleFavorite = (marketId: string) => {
     setFavoriteMarketIds((prev) => {
-      const next = prev.includes(marketId)
+      const isFavorite = prev.includes(marketId);
+      const next = isFavorite
         ? prev.filter((id) => id !== marketId)
         : [...prev, marketId];
       localStorage.setItem("favoriteMarkets", JSON.stringify(next));
+
+      // Sincronizar con el backend si hay usuario
+      if (sessionUser?.id) {
+        if (isFavorite) {
+          // Eliminar favorito
+          fetch(
+            `http://localhost:8000/interaccion/favoritos/${marketId}?usuario_id=${sessionUser.id}`,
+            {
+              method: "DELETE",
+            },
+          ).catch((err) => console.error("Error eliminando favorito:", err));
+        } else {
+          // Agregar favorito
+          fetch(`http://localhost:8000/interaccion/favoritos/${marketId}`, {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ usuario_id: sessionUser.id }),
+          }).catch((err) => console.error("Error agregando favorito:", err));
+        }
+      }
+
       return next;
     });
   };
@@ -392,7 +467,8 @@ useEffect(() => {
         selectedMarketLocation === "all" ||
         m.marketLocation === selectedMarketLocation;
       const matchesOpen = !showOpenOnly || m.isOpen;
-      const matchesFav = !showFavoritesOnly || favoriteMarketIds.includes(m.id);
+      const matchesFav =
+        !showFavoritesFilter || favoriteMarketIds.includes(m.id);
       return (
         matchesSearch && matchesCat && matchesLoc && matchesOpen && matchesFav
       );
@@ -419,7 +495,7 @@ useEffect(() => {
     selectedCategory,
     selectedMarketLocation,
     showOpenOnly,
-    showFavoritesOnly,
+    showFavoritesFilter,
     favoriteMarketIds,
     sortBy,
   ]);
@@ -722,8 +798,8 @@ useEffect(() => {
                 onSortChange={setSortBy}
                 showOpenOnly={showOpenOnly}
                 onShowOpenOnlyChange={setShowOpenOnly}
-                showFavoritesOnly={showFavoritesOnly}
-                onShowFavoritesOnlyChange={setShowFavoritesOnly}
+                showFavoritesOnly={showFavoritesFilter}
+                onShowFavoritesOnlyChange={setShowFavoritesFilter}
               />
 
               <div className="mb-4 bg-white rounded-xl p-3 shadow-sm border-l-4 border-orange-500">
@@ -734,7 +810,7 @@ useEffect(() => {
                       en {selectedMarketLocation}
                     </span>
                   )}
-                  {showFavoritesOnly && (
+                  {showFavoritesFilter && (
                     <span className="ml-2 text-orange-600">
                       (solo favoritos)
                     </span>
@@ -756,6 +832,8 @@ useEffect(() => {
                 sortBy={sortBy}
                 userId={sessionUser?.id}
                 userRole={userRole}
+                calificacionesPorPuesto={calificacionesPorPuesto}
+                onCalificacionChanged={loadUserData}
               />
             </>
           )}

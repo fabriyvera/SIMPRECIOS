@@ -51,7 +51,7 @@ async def calificar_puesto(
         .maybe_single()
         .execute()
     )
-    if existente.data:
+    if existente and existente.data:
         raise HTTPException(
             status_code=409,
             detail="Ya has calificado este puesto. Solo se permite una calificación por puesto."
@@ -205,7 +205,7 @@ async def denunciar_sobreprecio(
         .maybe_single()
         .execute()
     )
-    precio_referencia = float(precio_ref.data["precio_referencial_gob"]) if precio_ref.data else precio_actual
+    precio_referencia = float(precio_ref.data["precio_referencial_gob"]) if precio_ref and precio_ref.data else precio_actual
 
     # 4. Calcular diferencia y porcentaje de exceso
     diferencia = data.precio_cobrado - precio_referencia
@@ -359,3 +359,126 @@ async def listar_favoritos(
         ))
 
     return ListaFavoritosResponse(total=len(favoritos), favoritos=favoritos)
+
+
+async def obtener_calificaciones_usuario(
+    usuario_id: str,
+    db: Client
+):
+    """
+    Obtiene todas las calificaciones que el usuario ha hecho.
+    Retorna información del puesto y la calificación.
+    """
+    from app.models.interaccion import ListaCalificacionesResponse, CalificacionUsuarioResponse
+    
+    # Obtener calificaciones del usuario con información del puesto
+    calificaciones_raw = (
+        db.table("calificaciones")
+        .select("""
+            puesto_id,
+            estrellas,
+            comentario,
+            fecha_registro,
+            puestos_venta (
+                id,
+                nombre_puesto
+            )
+        """)
+        .eq("usuario_id", usuario_id)
+        .order("fecha_registro", desc=True)
+        .execute()
+    )
+
+    calificaciones = []
+    cal_list: List[Dict[str, Any]] = cast(List[Dict[str, Any]], calificaciones_raw.data) if calificaciones_raw.data else []
+    for cal in cal_list:
+        puesto: Dict[str, Any] = cal.get("puestos_venta", {}) if isinstance(cal, dict) else {}
+        
+        calificaciones.append(CalificacionUsuarioResponse(
+            puesto_id=int(cal.get("puesto_id", 0)),
+            nombre_puesto=puesto.get("nombre_puesto", "Sin nombre") if isinstance(puesto, dict) else "Sin nombre",
+            estrellas=int(cal.get("estrellas", 0)),
+            comentario=cal.get("comentario"),
+            fecha_registro=cal.get("fecha_registro"),
+        ))
+
+    return ListaCalificacionesResponse(total=len(calificaciones), calificaciones=calificaciones)
+
+
+# ─────────────────────────────────────────────
+# Interacciones — Vista unificada
+# Vista: vista_interacciones (calificaciones + denuncias)
+# ─────────────────────────────────────────────
+
+async def obtener_interacciones_puesto(
+    puesto_id: str,
+    db: Client
+):
+    """
+    Obtiene todas las interacciones (calificaciones y denuncias) de un puesto
+    desde la vista vista_interacciones, ordenadas por fecha descendente.
+    """
+    from app.models.interaccion import ListaInteraccionesResponse, InteraccionResponse
+    
+    interacciones_raw = (
+        db.table("vista_interacciones")
+        .select("*")
+        .eq("puesto_id", int(puesto_id))
+        .order("fecha", desc=True)
+        .execute()
+    )
+    
+    interacciones = []
+    inter_list: List[Dict[str, Any]] = cast(List[Dict[str, Any]], interacciones_raw.data) if interacciones_raw.data else []
+    
+    for inter in inter_list:
+        interacciones.append(InteraccionResponse(
+            tipo=inter.get("tipo", ""),
+            interaccion_id=int(inter.get("interaccion_id", 0)),
+            puesto_id=int(inter.get("puesto_id", 0)),
+            usuario_id=inter.get("usuario_id", ""),
+            puntuacion=inter.get("puntuacion"),
+            texto=inter.get("texto", ""),
+            fecha=inter.get("fecha"),
+            precio_detectado=inter.get("precio_detectado"),
+            estado=inter.get("estado"),
+        ))
+    
+    return ListaInteraccionesResponse(total=len(interacciones), interacciones=interacciones)
+
+
+async def obtener_interacciones_usuario(
+    usuario_id: str,
+    db: Client
+):
+    """
+    Obtiene todas las interacciones (calificaciones y denuncias) que ha hecho un usuario
+    desde la vista vista_interacciones, ordenadas por fecha descendente.
+    """
+    from app.models.interaccion import ListaInteraccionesResponse, InteraccionResponse
+    
+    interacciones_raw = (
+        db.table("vista_interacciones")
+        .select("*")
+        .eq("usuario_id", usuario_id)
+        .order("fecha", desc=True)
+        .execute()
+    )
+    
+    interacciones = []
+    inter_list: List[Dict[str, Any]] = cast(List[Dict[str, Any]], interacciones_raw.data) if interacciones_raw.data else []
+    
+    for inter in inter_list:
+        interacciones.append(InteraccionResponse(
+            tipo=inter.get("tipo", ""),
+            interaccion_id=int(inter.get("interaccion_id", 0)),
+            puesto_id=int(inter.get("puesto_id", 0)),
+            usuario_id=inter.get("usuario_id", ""),
+            puntuacion=inter.get("puntuacion"),
+            texto=inter.get("texto", ""),
+            fecha=inter.get("fecha"),
+            precio_detectado=inter.get("precio_detectado"),
+            estado=inter.get("estado"),
+        ))
+    
+    return ListaInteraccionesResponse(total=len(interacciones), interacciones=interacciones)

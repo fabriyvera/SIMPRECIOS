@@ -19,6 +19,8 @@ from app.models.interaccion import (
     DenunciarRequest, DenunciarResponse,
     AgregarFavoritoRequest, AgregarFavoritoResponse,
     EliminarFavoritoResponse, ListaFavoritosResponse,
+    ListaCalificacionesResponse,
+    ListaInteraccionesResponse,
 )
 from app.services import interaccion_service as service
 
@@ -147,3 +149,60 @@ async def listar_favoritos(
     db: Client = Depends(get_db),
 ):
     return await service.listar_favoritos(usuario_id, db)
+
+
+# ─────────────────────────────────────────────
+# Obtener calificaciones del usuario
+# ─────────────────────────────────────────────
+
+@router.get(
+    "/calificaciones",
+    response_model=ListaCalificacionesResponse,
+    summary="Obtener calificaciones del usuario actual",
+    description="""
+    Devuelve todas las calificaciones que el usuario ha registrado,
+    incluyendo información del puesto y la puntuación.
+    """,
+)
+async def obtener_calificaciones(
+    usuario_id: str = Query(..., description="ID del usuario autenticado"),
+    db: Client = Depends(get_db),
+):
+    return await service.obtener_calificaciones_usuario(usuario_id, db)
+
+
+# ─────────────────────────────────────────────
+# Interacciones — Vista unificada
+# ─────────────────────────────────────────────
+
+@router.get(
+    "/puestos/{puesto_id}/interacciones",
+    response_model=ListaInteraccionesResponse,
+    summary="Obtener comentarios (calificaciones y denuncias) de un puesto",
+    description="""
+    Devuelve todas las interacciones (calificaciones y denuncias) de un puesto,
+    unificadas desde la vista_interacciones, ordenadas por fecha descendente.
+    Incluye tanto calificaciones con comentarios como denuncias de sobreprecio.
+    """,
+)
+async def obtener_interacciones_puesto(
+    puesto_id: str,
+    db: Client = Depends(get_db),
+):
+    return await service.obtener_interacciones_puesto(puesto_id, db)
+
+
+@router.get(
+    "/usuario/interacciones",
+    response_model=ListaInteraccionesResponse,
+    summary="Obtener todas las interacciones del usuario",
+    description="""
+    Devuelve todas las interacciones (calificaciones y denuncias) que ha realizado
+    el usuario autenticado, ordenadas por fecha descendente.
+    """,
+)
+async def obtener_mis_interacciones(
+    usuario_id: str = Query(..., description="ID del usuario autenticado"),
+    db: Client = Depends(get_db),
+):
+    return await service.obtener_interacciones_usuario(usuario_id, db)

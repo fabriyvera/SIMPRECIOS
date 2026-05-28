@@ -46,6 +46,8 @@ interface MarketCardProps {
   distance?: string;
   userId?: string;
   userRole?: 'Vendedora' | 'Comprador';
+  calificacionesPorPuesto?: Record<string, number>;
+  onCalificacionChanged?: () => void;
 }
 
 export function MarketCard({
@@ -61,6 +63,8 @@ export function MarketCard({
   distance,
   userId,
   userRole = 'Comprador',
+  calificacionesPorPuesto = {},
+  onCalificacionChanged,
 }: MarketCardProps) {
   const { addToast } = useToast();
   
@@ -83,6 +87,10 @@ export function MarketCard({
     setFavorite(isFavorite);
   }, [isFavorite]);
 
+  // Verificar si el puesto ya fue calificado
+  const yaFueCalificado = calificacionesPorPuesto && calificacionesPorPuesto[market.id] !== undefined;
+  const calificacionAnterior = yaFueCalificado ? calificacionesPorPuesto[market.id] : 0;
+
   // Denuncia de sobreprecio
   const [showReport, setShowReport] = useState(false);
   const [reportSent, setReportSent] = useState(false);
@@ -99,6 +107,8 @@ export function MarketCard({
       setNewRating(0);
       setNewComment("");
       setShowAddReview(false);
+      // Recargar calificaciones después de calificar
+      onCalificacionChanged?.();
     },
     onError: (err) => addToast(err, 'error'),
   });
@@ -628,9 +638,17 @@ export function MarketCard({
               className="flex-1 font-bold shadow-md text-white disabled:opacity-50"
               style={{ backgroundColor: market.color }}
               onClick={() => setShowAddReview(true)}
-              disabled={loadingCalificar}
+              disabled={loadingCalificar || yaFueCalificado}
+              title={yaFueCalificado ? "Ya has calificado este puesto" : ""}
             >
-              Calificar atención
+              {yaFueCalificado ? (
+                <span className="flex items-center justify-center gap-2">
+                  <CheckCircle2 className="w-4 h-4" />
+                  Calificado ({calificacionAnterior} ⭐)
+                </span>
+              ) : (
+                "Calificar atención"
+              )}
             </Button>
             <Button
               className="flex-1 font-bold shadow-md border-2 disabled:opacity-50"
@@ -649,7 +667,7 @@ export function MarketCard({
             style={{ borderColor: market.color, backgroundColor: `${market.color}05` }}
           >
             <p className="text-sm font-bold" style={{ color: market.color }}>
-              Califica la atención de este puesto
+              {yaFueCalificado ? `Actualizar tu calificación` : `Califica la atención de este puesto`}
             </p>
             <p className="text-xs text-muted-foreground -mt-2">
               Tu calificación ayuda a otros compradores a elegir mejor.

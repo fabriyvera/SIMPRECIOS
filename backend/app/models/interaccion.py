@@ -93,3 +93,41 @@ class EliminarFavoritoResponse(BaseModel):
 class ListaFavoritosResponse(BaseModel):
     total: int
     favoritos: list[FavoritoResponse]
+
+
+# ─────────────────────────────────────────────
+# Calificaciones — Obtener del usuario
+# Tabla: calificaciones
+# ─────────────────────────────────────────────
+
+class CalificacionUsuarioResponse(BaseModel):
+    puesto_id: int
+    nombre_puesto: str
+    estrellas: int
+    comentario: Optional[str]
+    fecha_registro: datetime
+
+class ListaCalificacionesResponse(BaseModel):
+    total: int
+    calificaciones: list[CalificacionUsuarioResponse]
+
+
+# ─────────────────────────────────────────────
+# Interacciones — Vista unificada
+# Vista: vista_interacciones (calificaciones + denuncias)
+# ─────────────────────────────────────────────
+
+class InteraccionResponse(BaseModel):
+    tipo: str                       # 'calificacion' o 'denuncia'
+    interaccion_id: int
+    puesto_id: int
+    usuario_id: str
+    puntuacion: Optional[int]       # Solo para calificaciones
+    texto: str                      # comentario para calificaciones, motivo para denuncias
+    fecha: datetime
+    precio_detectado: Optional[float]  # Solo para denuncias
+    estado: Optional[str]           # Solo para denuncias
+
+class ListaInteraccionesResponse(BaseModel):
+    total: int
+    interacciones: list[InteraccionResponse]

@@ -10,6 +10,8 @@ export const API = {
     AGREGAR_FAVORITO: '/interaccion/favoritos/{puesto_id}',
     ELIMINAR_FAVORITO: '/interaccion/favoritos/{puesto_id}',
     LISTAR_FAVORITOS: '/interaccion/favoritos',
+    OBTENER_INTERACCIONES_PUESTO: '/interaccion/puestos/{puesto_id}/interacciones',
+    OBTENER_INTERACCIONES_USUARIO: '/interaccion/usuario/interacciones',
   },
 };
 
