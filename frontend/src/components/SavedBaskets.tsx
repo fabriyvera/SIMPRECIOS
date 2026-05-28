@@ -27,7 +27,7 @@ export function SavedBaskets({ markets }: SavedBasketsProps) {
       const supabase = createClient();
       
       // ATENCIÓN: Pega aquí el mismo UUID completo que usaste para guardar
-      const usuarioIdPrueba = "0511f871-0c1c-47b1-bb77-49717568807e"; 
+      const usuarioIdPrueba = "31c3b38e-6c7b-4876-bedf-a46fe1d654ef"; 
 
       const { data, error } = await supabase
         .from("canastas_favoritas")
