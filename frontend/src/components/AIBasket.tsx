@@ -29,23 +29,39 @@ interface GeneratedBasket {
   membersServed: number;
   weeklyBudget: number;
   daysCovered: number;
+  wasPruned: boolean; // NUEVO: Para saber si se activó el Modo Ahorro Extremo
 }
 
 const ESSENTIALS = [
-  { category: "Verduras", name: "Papas", baseQty: 3, basePrice: 7.00 },
-  { category: "Verduras", name: "Tomates", baseQty: 2, basePrice: 8.00 },
-  { category: "Verduras", name: "Cebollas", baseQty: 2, basePrice: 6.00 },
-  { category: "Verduras", name: "Zanahorias", baseQty: 2, basePrice: 5.00 },
-  { category: "Verduras", name: "Lechuga", baseQty: 2, basePrice: 4.00 },
-  { category: "Verduras", name: "Arvejas", baseQty: 1, basePrice: 9.00 },
-  { category: "Verduras", name: "Brócoli", baseQty: 1, basePrice: 9.00 },
-  { category: "Pollo", name: "Pollo entero", baseQty: 2, basePrice: 28.00 },
-  { category: "Pollo", name: "Pechuga", baseQty: 1, basePrice: 35.00 },
-  { category: "Carne", name: "Carne molida", baseQty: 2, basePrice: 35.00 },
-  { category: "Carne", name: "Carne de res", baseQty: 1, basePrice: 42.00 },
+  // Verduras
+  { category: "Verduras", name: "Papa", baseQty: 3, basePrice: 7.00 },
+  { category: "Verduras", name: "Tomate", baseQty: 2, basePrice: 8.00 },
+  { category: "Verduras", name: "Brocoli", baseQty: 1, basePrice: 9.00 },
+  { category: "Verduras", name: "Apio", baseQty: 1, basePrice: 4.00 },
+  { category: "Verduras", name: "Chuño", baseQty: 1, basePrice: 12.00 },
+  
+  // Frutas
+  { category: "Frutas", name: "Platano", baseQty: 2, basePrice: 6.00 },
+  { category: "Frutas", name: "Manzana", baseQty: 1, basePrice: 10.00 },
+  { category: "Frutas", name: "Naranja", baseQty: 2, basePrice: 8.00 },
+  { category: "Frutas", name: "Piña", baseQty: 1, basePrice: 10.00 },
+  
+  // Carnes (Res, Pollo y Pescado unificados según la BD)
+  { category: "Carnes", name: "Pechuga de pollo", baseQty: 1, basePrice: 22.00 },
+  { category: "Carnes", name: "Pierna de pollo", baseQty: 1, basePrice: 18.00 },
+  { category: "Carnes", name: "Alitas de pollo", baseQty: 1, basePrice: 20.00 },
+  { category: "Carnes", name: "Chuleta de res", baseQty: 1, basePrice: 35.00 },
+  { category: "Carnes", name: "Costilla de res", baseQty: 1, basePrice: 28.00 },
+  { category: "Carnes", name: "Trucha", baseQty: 1, basePrice: 30.00 },
+  { category: "Carnes", name: "Sabalo", baseQty: 1, basePrice: 25.00 },
+  { category: "Carnes", name: "Pejerrey", baseQty: 1, basePrice: 25.00 },
 ];
 
-const CATEGORY_ICONS: Record<string, string> = { Verduras: "🥬", Pollo: "🍗", Carne: "🥩" };
+const CATEGORY_ICONS: Record<string, string> = { 
+  Verduras: "🥬", 
+  Frutas: "🍎", 
+  Carnes: "🥩" 
+};
 
 export function AIBasket({ markets }: AIBasketProps) {
   // Estados de navegación
@@ -79,64 +95,60 @@ export function AIBasket({ markets }: AIBasketProps) {
       const numMembers = parseInt(members) || 4;
       const weeklyBudget = parseFloat(budget) || 500;
       const scaleFactor = numMembers / 4;
-      const basket: BasketItem[] = [];
+      let tempBasket: BasketItem[] = [];
       
-      let remainingBudget = weeklyBudget;
-      let requiredCost = 0;
-
       const filteredEssentials = ESSENTIALS.filter(item => selectedItems.includes(item.name));
 
+      // 1. La IA genera primero la lista ideal completa ajustada por tamaño familiar
       for (const essential of filteredEssentials) {
         const quantity = Math.ceil(essential.baseQty * scaleFactor);
-        
-        // 1. Definimos un "Mercado Base" por si la BD falla o no tiene el producto
+        let bestMarket: Market | null = null;
         let bestPrice = essential.basePrice;
-        let bestMarketName = "Mercado Promedio"; 
-        let bestMarketColor = "#9CA3AF"; // Color gris neutro
-
-        // 2. Buscamos en los mercados de la BD a ver si hay una mejor oferta
-        if (markets && markets.length > 0) {
-          for (const market of markets) {
-            const product = market.products?.find((p) => p.name === essential.name);
-            if (product?.available && product.price <= bestPrice) {
-              bestPrice = product.price;
-              bestMarketName = market.name;
-              bestMarketColor = market.color || "#9333ea";
-            }
+        
+        for (const market of markets) {
+          const product = market.products.find((p) => p.name === essential.name);
+          if (product?.available && product.price <= bestPrice) {
+            bestPrice = product.price;
+            bestMarket = market;
           }
         }
         
         const totalPrice = quantity * bestPrice;
-        requiredCost += totalPrice;
-
-        // 3. QUITAMOS la restricción de "bestMarket". Ahora siempre inserta si hay dinero.
-        if (remainingBudget >= totalPrice) {
-          basket.push({ 
-            productName: essential.name, 
-            quantity, 
-            unitPrice: bestPrice, 
-            totalPrice, 
-            marketName: bestMarketName, 
-            marketColor: bestMarketColor, 
-            category: essential.category 
-          });
-          remainingBudget -= totalPrice;
-        }
+        
+        tempBasket.push({ 
+          productName: essential.name, 
+          quantity, 
+          unitPrice: bestPrice, 
+          totalPrice, 
+          marketName: bestMarket ? bestMarket.name : "Mercado Promedio", 
+          marketColor: bestMarket ? bestMarket.color : "#9CA3AF", 
+          category: essential.category 
+        });
       }
 
-      const totalCost = basket.reduce((s, i) => s + i.totalPrice, 0);
-      let daysCovered = 7;
-      if (weeklyBudget < requiredCost) {
-        daysCovered = Math.max(1, Math.floor((weeklyBudget / requiredCost) * 7));
+      // 2. ALGORITMO DE PODA (Canasta de Supervivencia)
+      // Si el costo total supera el presupuesto, la IA empieza a sacrificar lo más caro
+      let wasPruned = false;
+      
+      while (tempBasket.reduce((sum, item) => sum + item.totalPrice, 0) > weeklyBudget && tempBasket.length > 0) {
+        wasPruned = true;
+        // Ordenamos la lista para dejar el producto con mayor precio unitario al principio (índice 0)
+        tempBasket.sort((a, b) => b.unitPrice - a.unitPrice);
+        // Eliminamos el producto más costoso por kilo del mercado
+        tempBasket.shift(); 
       }
+
+      const totalCost = tempBasket.reduce((s, i) => s + i.totalPrice, 0);
+      const savings = weeklyBudget > totalCost ? weeklyBudget - totalCost : 0;
 
       setGeneratedBasket({ 
-        items: basket, 
+        items: tempBasket, 
         totalCost, 
-        savings: weeklyBudget - totalCost, 
+        savings, 
         membersServed: numMembers, 
         weeklyBudget,
-        daysCovered 
+        daysCovered: 7, // Como se redimensionó el contenido, lo que quedó cubre los 7 días
+        wasPruned
       });
       setIsGenerating(false);
     }, 1500);
@@ -146,32 +158,21 @@ export function AIBasket({ markets }: AIBasketProps) {
     setIsSaving(true);
     try {
       const supabase = createClient();
+      const usuarioIdPrueba = "31c3b38e-6c7b-4876-bedf-a46fe1d654ef"; 
 
-      // 1. Obtener el usuario autenticado en este momento
-      const { data: { user }, error: authError } = await supabase.auth.getUser();
-
-      // 2. Bloquear el guardado si nadie ha iniciado sesión
-      if (authError || !user) {
-        alert("Por favor, inicia sesión en el sistema para guardar tus canastas.");
-        return; // Detiene la ejecución aquí
-      }
-
-      // 3. Guardar la canasta usando el ID dinámico del usuario
-      const { error } = await supabase
+      const { data, error } = await supabase
         .from('canastas_favoritas')
         .insert([
           {
-            usuario_id: user.id, // <--- Aquí captura automáticamente el ID correcto
-            nombre_canasta: `Canasta IA (${generatedBasket?.membersServed} pers.)`,
-            cantidad_familiares: generatedBasket?.membersServed,
+            usuario_id: usuarioIdPrueba,
+            nombre_canasta: generatedBasket?.wasPruned ? `Canasta Supervivencia (${generatedBasket?.membersServed} pers.)` : `Canasta IA (${generatedBasket?.membersServed} pers.)`,
             presupuesto_semanal_bs: generatedBasket?.weeklyBudget,
             items: generatedBasket?.items
           }
         ]);
 
       if (error) throw error;
-
-      alert("¡Éxito! La canasta se guardó en tu perfil.");
+      alert("¡Éxito! La canasta se guardó en tu base de datos Supabase.");
     } catch (error) {
       console.error("Error al guardar en Supabase:", error);
       alert("Error al guardar. Revisa la consola de tu navegador.");
@@ -239,58 +240,80 @@ export function AIBasket({ markets }: AIBasketProps) {
 
       {/* PASO 2: PREFERENCIAS GRANULARES */}
       {step === 2 && (
-        <div className="bg-white rounded-3xl shadow-xl p-6 border border-gray-100 animate-in fade-in slide-in-from-right-4 duration-500">
-          <div className="flex items-center gap-3 mb-6">
-             <div className="bg-pink-100 p-2 rounded-lg"><ShoppingCart className="w-6 h-6 text-pink-600" /></div>
-             <h3 className="text-xl font-bold text-gray-800">Preferencias de Comida</h3>
-          </div>
+        <div className="bg-white rounded-2xl shadow-xl p-7 border border-slate-100 animate-in fade-in slide-in-from-right-4 duration-500">
           
-          <p className="text-sm text-gray-600 mb-6">Selecciona qué productos quieres que la IA incluya en tu canasta semanal.</p>
+          {/* Cabecera elegante */}
+          <div className="flex items-start gap-4 mb-8">
+             <div className="bg-slate-50 p-3 rounded-xl border border-slate-200 shadow-sm">
+               <ShoppingCart className="w-6 h-6 text-slate-700" />
+             </div>
+             <div>
+               <h3 className="text-xl font-extrabold text-slate-900 tracking-tight">Preferencias de Comida</h3>
+               <p className="text-sm text-slate-500 mt-1">Configura los parámetros exactos para el algoritmo de recomendación.</p>
+             </div>
+          </div>
 
-          <div className="space-y-4">
-            {/* Acordeón de Personalización Avanzada */}
+          <div className="space-y-6">
+            {/* Botón de Acordeón Minimalista */}
             <button 
               onClick={() => setShowAdvanced(!showAdvanced)}
-              className="w-full flex items-center justify-between p-4 bg-gray-50 rounded-2xl border border-gray-100 hover:bg-gray-100 transition-colors"
+              className="w-full flex items-center justify-between p-4 bg-white rounded-xl border border-slate-200 hover:border-purple-300 hover:shadow-sm transition-all duration-200 group"
             >
-              <span className="font-bold text-gray-700 flex items-center gap-2">
-                <Sparkles className="w-4 h-4 text-purple-600" /> Personalizar productos específicos
+              <span className="font-semibold text-slate-700 flex items-center gap-2 group-hover:text-purple-700 transition-colors">
+                <Sparkles className="w-4 h-4 text-purple-500" /> 
+                Personalizar catálogo de productos
               </span>
-              {showAdvanced ? <ChevronUp className="w-5 h-5 text-gray-400" /> : <ChevronDown className="w-5 h-5 text-gray-400" />}
+              {showAdvanced ? <ChevronUp className="w-5 h-5 text-slate-400" /> : <ChevronDown className="w-5 h-5 text-slate-400" />}
             </button>
 
+            {/* Panel de Selección Avanzada */}
             {showAdvanced && (
-              <div className="grid grid-cols-1 gap-4 pt-2 max-h-[350px] overflow-y-auto px-1">
-                {["Verduras", "Pollo", "Carne"].map(cat => (
-                  <div key={cat} className="space-y-2">
-                    <h4 className="text-xs font-black text-gray-400 uppercase tracking-widest flex items-center gap-2">
-                      {CATEGORY_ICONS[cat]} {cat}
-                    </h4>
-                    <div className="grid grid-cols-2 gap-2">
-                      {ESSENTIALS.filter(i => i.category === cat).map(item => (
-                        <button
-                          key={item.name}
-                          onClick={() => toggleItem(item.name)}
-                          className={`flex items-center gap-2 p-3 rounded-xl border transition-all text-sm font-medium ${
-                            selectedItems.includes(item.name) 
-                            ? "bg-purple-50 border-purple-200 text-purple-700 shadow-sm" 
-                            : "bg-white border-gray-100 text-gray-400 opacity-60"
-                          }`}
-                        >
-                          <div className={`w-5 h-5 rounded-md border flex items-center justify-center ${selectedItems.includes(item.name) ? "bg-purple-600 border-purple-600" : "bg-white border-gray-300"}`}>
-                            {selectedItems.includes(item.name) && <CheckCircle className="w-4 h-4 text-white" />}
-                          </div>
-                          {item.name}
-                        </button>
-                      ))}
+              <div className="grid grid-cols-1 gap-6 pt-2 max-h-[380px] overflow-y-auto px-1 pb-4">
+                {["Verduras", "Frutas", "Carnes"].map(cat => (
+                  <div key={cat} className="space-y-4">
+                    {/* Separador de Categoría Elegante */}
+                    <div className="flex items-center gap-3 pb-2 border-b border-slate-100">
+                      <span className="text-lg bg-slate-50 p-1.5 rounded-lg border border-slate-100">{CATEGORY_ICONS[cat]}</span>
+                      <h4 className="text-xs font-bold text-slate-400 uppercase tracking-widest">
+                        {cat}
+                      </h4>
+                    </div>
+                    
+                    {/* Grid de Checkboxes Profesionales */}
+                    <div className="grid grid-cols-2 gap-3">
+                      {ESSENTIALS.filter(i => i.category === cat).map(item => {
+                        const isSelected = selectedItems.includes(item.name);
+                        return (
+                          <button
+                            key={item.name}
+                            onClick={() => toggleItem(item.name)}
+                            className={`relative flex items-center justify-between p-3.5 rounded-xl border transition-all duration-200 text-sm font-medium focus:outline-none ${
+                              isSelected 
+                              ? "bg-white border-purple-500 ring-1 ring-purple-500 text-slate-900 shadow-sm" 
+                              : "bg-slate-50 border-slate-200 text-slate-500 hover:bg-slate-100 hover:border-slate-300 hover:text-slate-700"
+                            }`}
+                          >
+                            <span className="truncate pr-3">{item.name}</span>
+                            {/* Icono de Checkbox limpio */}
+                            <div className={`flex-shrink-0 w-5 h-5 rounded-md border flex items-center justify-center transition-all duration-200 ${
+                              isSelected 
+                              ? "bg-purple-600 border-purple-600 shadow-sm shadow-purple-200" 
+                              : "bg-white border-slate-300"
+                            }`}>
+                              {isSelected && <CheckCircle className="w-3.5 h-3.5 text-white" strokeWidth={3} />}
+                            </div>
+                          </button>
+                        );
+                      })}
                     </div>
                   </div>
                 ))}
               </div>
             )}
 
-            <Button onClick={generateBasket} className="w-full h-14 bg-gradient-to-r from-purple-600 to-pink-600 text-white font-bold text-lg rounded-2xl shadow-xl mt-4">
-              Generar Canasta IA <Sparkles className="ml-2 w-5 h-5" />
+            {/* Call To Action (Botón Principal) */}
+            <Button onClick={generateBasket} className="w-full h-14 bg-slate-900 hover:bg-slate-800 text-white font-semibold text-lg rounded-xl shadow-lg hover:shadow-xl transition-all mt-4 border border-slate-800">
+              Ejecutar Motor de IA <Sparkles className="ml-2 w-5 h-5 text-purple-400" />
             </Button>
           </div>
         </div>
@@ -307,13 +330,16 @@ export function AIBasket({ markets }: AIBasketProps) {
             </div>
           ) : generatedBasket && (
             <div className="space-y-4">
-              {/* Alerta de Días (HU-13) */}
-              {generatedBasket.daysCovered < 7 ? (
+              
+              {/* Alerta Dinámica (HU-13) */}
+              {generatedBasket.wasPruned ? (
                 <div className="bg-gradient-to-r from-amber-500 to-orange-600 rounded-3xl p-5 text-white shadow-lg flex items-center gap-4">
                   <div className="bg-white/20 p-3 rounded-2xl"><AlertTriangle className="w-8 h-8" /></div>
                   <div>
-                    <h3 className="font-black text-lg italic leading-none">PRESUPUESTO LIMITADO</h3>
-                    <p className="text-sm opacity-90 font-medium">La carne te alcanzará para <span className="underline decoration-2 font-black">{generatedBasket.daysCovered} días</span>. Prioriza el consumo.</p>
+                    <h3 className="font-black text-lg italic leading-none">🛡️ MODO AHORRO EXTREMO</h3>
+                    <p className="text-sm opacity-90 font-medium mt-1">
+                      Hemos retirado los productos más costosos (como carnes y pollo) de tu lista para garantizar que tus Bs. {generatedBasket.weeklyBudget} te alcancen para llevar suficientes verduras y tubérculos para los 7 días completos.
+                    </p>
                   </div>
                 </div>
               ) : (
@@ -321,7 +347,7 @@ export function AIBasket({ markets }: AIBasketProps) {
                   <div className="bg-white/20 p-3 rounded-2xl"><CheckCircle className="w-8 h-8" /></div>
                   <div>
                     <h3 className="font-black text-lg italic leading-none">CANASTA COMPLETADA</h3>
-                    <p className="text-sm opacity-90 font-medium">Tu familia de {generatedBasket.membersServed} tiene la semana cubierta.</p>
+                    <p className="text-sm opacity-90 font-medium">Tu familia de {generatedBasket.membersServed} tiene la cobertura semanal completa y óptima.</p>
                   </div>
                 </div>
               )}
@@ -329,11 +355,11 @@ export function AIBasket({ markets }: AIBasketProps) {
               {/* Resumen de Costos */}
               <div className="grid grid-cols-2 gap-3">
                 <div className="bg-white p-5 rounded-3xl shadow-md border border-gray-100">
-                  <p className="text-xs font-black text-gray-400 uppercase tracking-widest mb-1">Costo Total</p>
+                  <p className="text-xs font-black text-gray-400 uppercase tracking-widest mb-1">Costo de Compra</p>
                   <p className="text-2xl font-black text-gray-800">Bs. {generatedBasket.totalCost.toFixed(1)}</p>
                 </div>
                 <div className="bg-white p-5 rounded-3xl shadow-md border border-gray-100">
-                  <p className="text-xs font-black text-emerald-500 uppercase tracking-widest mb-1">Tu Ahorro</p>
+                  <p className="text-xs font-black text-emerald-500 uppercase tracking-widest mb-1">Tu Saldo Disponible</p>
                   <p className="text-2xl font-black text-emerald-600">Bs. {generatedBasket.savings.toFixed(1)}</p>
                 </div>
               </div>

@@ -8,7 +8,7 @@ import { Navbar } from "@/components/Navbar";
 import { MapView } from "@/components/MapView";
 import { AIBasket } from "@/components/AIBasket";
 import { SavedBaskets } from "@/components/SavedBaskets";
-import { ShoppingBag, Store, ArrowLeft } from "lucide-react";
+import { ShoppingBag, Store, ArrowLeft, Sparkles, Save } from "lucide-react";
 import { Avatar } from "@/components/ui/avatar";
 import { Button } from "@/components/ui/button";
 import {
@@ -115,7 +115,7 @@ useEffect(() => {
   return () => subscription.unsubscribe();
 }, []);
 
-
+  const [activeAiTab, setActiveAiTab] = useState<"generar" | "guardadas">("generar");
   const [currentView, setCurrentView] = useState<AppView>("home");
   const [isVendorMode, setIsVendorMode] = useState(false);
   const [selectedVendorMarket, setSelectedVendorMarket] = useState<
@@ -765,9 +765,43 @@ useEffect(() => {
           )}
 
           {currentView === "ai" && (
-            <div className="flex flex-col gap-12">
-              <AIBasket markets={markets} />
-              <SavedBaskets markets={markets} />
+            <div className="max-w-2xl mx-auto w-full flex flex-col gap-4">
+              
+              {/* Selector de Pestañas (Tabs) Elegante */}
+              <div className="bg-slate-100/80 backdrop-blur-sm p-1.5 rounded-2xl flex mx-4 border border-slate-200/60 shadow-sm mt-2">
+                <button
+                  onClick={() => setActiveAiTab("generar")}
+                  className={`flex-1 py-3 text-sm font-bold rounded-xl transition-all duration-300 flex items-center justify-center gap-2 ${
+                    activeAiTab === "generar"
+                      ? "bg-white text-purple-700 shadow-sm ring-1 ring-slate-900/5"
+                      : "text-slate-500 hover:text-slate-700 hover:bg-slate-200/50"
+                  }`}
+                >
+                  <Sparkles className="w-4 h-4" />
+                  Nueva Consulta IA
+                </button>
+                <button
+                  onClick={() => setActiveAiTab("guardadas")}
+                  className={`flex-1 py-3 text-sm font-bold rounded-xl transition-all duration-300 flex items-center justify-center gap-2 ${
+                    activeAiTab === "guardadas"
+                      ? "bg-white text-purple-700 shadow-sm ring-1 ring-slate-900/5"
+                      : "text-slate-500 hover:text-slate-700 hover:bg-slate-200/50"
+                  }`}
+                >
+                  <Save className="w-4 h-4" />
+                  Mis Guardadas
+                </button>
+              </div>
+
+              {/* Renderizado Condicional Animado */}
+              <div className="animate-in fade-in zoom-in-95 duration-300">
+                {activeAiTab === "generar" ? (
+                  <AIBasket markets={markets} />
+                ) : (
+                  <SavedBaskets markets={markets} />
+                )}
+              </div>
+              
             </div>
           )}
         </div>
