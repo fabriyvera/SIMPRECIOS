@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { Sparkles, Users, DollarSign, ShoppingCart, TrendingDown, CheckCircle, AlertTriangle, Save, ArrowRight, ArrowLeft, ChevronDown, ChevronUp } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -10,6 +10,7 @@ import { createClient } from "@/utils/supabase/client";
 
 interface AIBasketProps {
   markets: Market[];
+  initialData?: any;
 }
 
 interface BasketItem {
@@ -63,7 +64,7 @@ const CATEGORY_ICONS: Record<string, string> = {
   Carnes: "🥩" 
 };
 
-export function AIBasket({ markets }: AIBasketProps) {
+export function AIBasket({ markets, initialData }: AIBasketProps) {
   // Estados de navegación
   const [step, setStep] = useState(1); 
   
@@ -79,6 +80,25 @@ export function AIBasket({ markets }: AIBasketProps) {
   const [generatedBasket, setGeneratedBasket] = useState<GeneratedBasket | null>(null);
   const [isGenerating, setIsGenerating] = useState(false);
   const [isSaving, setIsSaving] = useState(false);
+
+  // Escuchar si llega una canasta para modificar
+  useEffect(() => {
+    if (initialData) {
+      // 1. Rellenar personas y presupuesto
+      setMembers(initialData.cantidad_familiares?.toString() || "4");
+      setBudget(initialData.presupuesto_semanal_bs?.toString() || "500");
+      
+      // 2. Marcar automáticamente los checkboxes de los productos guardados
+      if (initialData.items) {
+        const savedProductNames = initialData.items.map((item: any) => item.productName);
+        setSelectedItems(savedProductNames);
+      }
+      
+      // 3. Saltar directamente al Paso 2 y abrir el acordeón para que el usuario vea su lista
+      setStep(1);
+      setShowAdvanced(true);
+    }
+  }, [initialData]);
 
   // Manejo de Checkboxes granulares
   const toggleItem = (name: string) => {

@@ -116,6 +116,7 @@ useEffect(() => {
 }, []);
 
   const [activeAiTab, setActiveAiTab] = useState<"generar" | "guardadas">("generar");
+  const [basketToModify, setBasketToModify] = useState<any>(null);
   const [currentView, setCurrentView] = useState<AppView>("home");
   const [isVendorMode, setIsVendorMode] = useState(false);
   const [selectedVendorMarket, setSelectedVendorMarket] = useState<
@@ -796,9 +797,18 @@ useEffect(() => {
               {/* Renderizado Condicional Animado */}
               <div className="animate-in fade-in zoom-in-95 duration-300">
                 {activeAiTab === "generar" ? (
-                  <AIBasket markets={markets} />
+                  <AIBasket 
+                    markets={markets} 
+                    initialData={basketToModify} // <-- Enviamos los datos pre-cargados
+                  />
                 ) : (
-                  <SavedBaskets markets={markets} />
+                  <SavedBaskets 
+                    markets={markets} 
+                    onModifyBasket={(basket) => {
+                      setBasketToModify(basket); // Guardamos la canasta elegida
+                      setActiveAiTab("generar"); // Cambiamos a la pestaña de Nueva Consulta
+                    }} 
+                  />
                 )}
               </div>
               
