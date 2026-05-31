@@ -8,7 +8,7 @@ import { Navbar } from "@/components/Navbar";
 import { MapView } from "@/components/MapView";
 import { AIBasket } from "@/components/AIBasket";
 import { SavedBaskets } from "@/components/SavedBaskets";
-import { ShoppingBag, Store, ArrowLeft } from "lucide-react";
+import { ShoppingBag, Store, ArrowLeft, Sparkles, Save } from "lucide-react";
 import { Avatar } from "@/components/ui/avatar";
 import { Button } from "@/components/ui/button";
 import {
@@ -65,7 +65,8 @@ export default function HomeClient({ initialMarkets }: HomeClientProps) {
   const [showOpenOnly, setShowOpenOnly] = useState(false);
   const [userLocation, setUserLocation] = useState<UserLocation | null>(null);
   const [favoriteMarketIds, setFavoriteMarketIds] = useState<string[]>([]);
-
+  const [activeAiTab, setActiveAiTab] = useState<"generar" | "guardadas">("generar");
+  const [basketToModify, setBasketToModify] = useState<any>(null);
   // ── Geolocalización ──
   useEffect(() => {
     if (!("geolocation" in navigator)) return;
@@ -235,21 +236,29 @@ export default function HomeClient({ initialMarkets }: HomeClientProps) {
     syncWithDatabase();
   }, [sessionUser?.id]);
 
-  // ── Cargar favoritos y calificaciones del usuario ──
+// ── Cargar favoritos y calificaciones del usuario ──
   useEffect(() => {
     const loadUserData = async () => {
       if (!sessionUser?.id) return;
       try {
-        // Calificaciones
-        const calRes = await fetch(`http://localhost:8000/interaccion/calificaciones?usuario_id=${sessionUser.id}`);
+        // 👇 Obtener el token JWT de la sesión activa
+        const { data: { session } } = await supabase.auth.getSession();
+        const token = session?.access_token;
+        if (!token) return;
+
+        const headers = { "Authorization": `Bearer ${token}` };
+
+        // Calificaciones — sin query params, el backend usa el token
+        const calRes = await fetch(`http://localhost:8000/interaccion/calificaciones`, { headers });
         if (calRes.ok) {
           const calData = await calRes.json();
           const map: Record<string, number> = {};
           calData.calificaciones?.forEach((c: any) => { map[c.puesto_id] = c.estrellas; });
           setCalificacionesPorPuesto(map);
         }
+
         // Favoritos
-        const favRes = await fetch(`http://localhost:8000/interaccion/favoritos?usuario_id=${sessionUser.id}`);
+        const favRes = await fetch(`http://localhost:8000/interaccion/favoritos`, { headers });
         if (favRes.ok) {
           const favData = await favRes.json();
           const ids = favData.favoritos?.map((f: any) => f.puesto_id) || [];
@@ -262,16 +271,19 @@ export default function HomeClient({ initialMarkets }: HomeClientProps) {
     };
     loadUserData();
   }, [sessionUser?.id]);
-
-  // ── Handlers ──
-  const handleToggleVendorMode = () => {
-    if (isVendorMode) {
-      setIsVendorMode(false);
-      setCurrentView("home");
-      setSelectedVendorMarket(null);
-    } else {
-      setIsVendorMode(true);
-      setCurrentView("vendor");
+  
+  const recargarCalificaciones = async () => {
+    const { data: { session } } = await supabase.auth.getSession();
+    const token = session?.access_token;
+    if (!token) return;
+    const res = await fetch(`http://localhost:8000/interaccion/calificaciones`, {
+      headers: { "Authorization": `Bearer ${token}` }
+    });
+    if (res.ok) {
+      const data = await res.json();
+      const map: Record<string, number> = {};
+      data.calificaciones?.forEach((c: any) => { map[c.puesto_id] = c.estrellas; });
+      setCalificacionesPorPuesto(map);
     }
   };
 
@@ -320,18 +332,28 @@ export default function HomeClient({ initialMarkets }: HomeClientProps) {
   const handleToggleFavorite = async (marketId: string) => {
     const isFavorite = favoriteMarketIds.includes(marketId);
     let newFavs: string[];
+
+    // 👇 Obtener token antes de cualquier fetch
+    const { data: { session } } = await supabase.auth.getSession();
+    const token = session?.access_token;
+    const headers: Record<string, string> = token
+      ? { "Authorization": `Bearer ${token}` }
+      : {};
+
     if (isFavorite) {
       newFavs = favoriteMarketIds.filter(id => id !== marketId);
-      if (sessionUser?.id) {
-        await fetch(`http://localhost:8000/interaccion/favoritos/${marketId}?usuario_id=${sessionUser.id}`, { method: "DELETE" });
+      if (sessionUser?.id && token) {
+        await fetch(`http://localhost:8000/interaccion/favoritos/${marketId}`, {
+          method: "DELETE",
+          headers,
+        });
       }
     } else {
       newFavs = [...favoriteMarketIds, marketId];
-      if (sessionUser?.id) {
+      if (sessionUser?.id && token) {
         await fetch(`http://localhost:8000/interaccion/favoritos/${marketId}`, {
           method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ usuario_id: sessionUser.id }),
+          headers,
         });
       }
     }
@@ -565,24 +587,58 @@ export default function HomeClient({ initialMarkets }: HomeClientProps) {
                 userId={sessionUser?.id}
                 userRole={userRole}
                 calificacionesPorPuesto={calificacionesPorPuesto}
-                onCalificacionChanged={() => {
-                  // Recargar calificaciones después de calificar
-                  fetch(`http://localhost:8000/interaccion/calificaciones?usuario_id=${sessionUser?.id}`)
-                    .then(res => res.json())
-                    .then(data => {
-                      const map: Record<string, number> = {};
-                      data.calificaciones?.forEach((c: any) => { map[c.puesto_id] = c.estrellas; });
-                      setCalificacionesPorPuesto(map);
-                    });
-                }}
+                onCalificacionChanged={recargarCalificaciones}
               />
             </>
           )}
           {currentView === "map" && <MapView markets={finalMarkets} userLocation={userLocation} />}
           {currentView === "ai" && (
-            <div className="flex flex-col gap-12">
-              <AIBasket markets={markets} />
-              <SavedBaskets markets={markets} />
+            <div className="max-w-2xl mx-auto w-full flex flex-col gap-4">
+              
+              {/* Selector de Pestañas (Tabs) Elegante */}
+              <div className="bg-slate-100/80 backdrop-blur-sm p-1.5 rounded-2xl flex mx-4 border border-slate-200/60 shadow-sm mt-2">
+                <button
+                  onClick={() => setActiveAiTab("generar")}
+                  className={`flex-1 py-3 text-sm font-bold rounded-xl transition-all duration-300 flex items-center justify-center gap-2 ${
+                    activeAiTab === "generar"
+                      ? "bg-white text-purple-700 shadow-sm ring-1 ring-slate-900/5"
+                      : "text-slate-500 hover:text-slate-700 hover:bg-slate-200/50"
+                  }`}
+                >
+                  <Sparkles className="w-4 h-4" />
+                  Nueva Consulta IA
+                </button>
+                <button
+                  onClick={() => setActiveAiTab("guardadas")}
+                  className={`flex-1 py-3 text-sm font-bold rounded-xl transition-all duration-300 flex items-center justify-center gap-2 ${
+                    activeAiTab === "guardadas"
+                      ? "bg-white text-purple-700 shadow-sm ring-1 ring-slate-900/5"
+                      : "text-slate-500 hover:text-slate-700 hover:bg-slate-200/50"
+                  }`}
+                >
+                  <Save className="w-4 h-4" />
+                  Mis Guardadas
+                </button>
+              </div>
+
+              {/* Renderizado Condicional Animado */}
+              <div className="animate-in fade-in zoom-in-95 duration-300">
+                {activeAiTab === "generar" ? (
+                  <AIBasket 
+                    markets={markets} 
+                    initialData={basketToModify} // <-- Enviamos los datos pre-cargados
+                  />
+                ) : (
+                  <SavedBaskets 
+                    markets={markets} 
+                    onModifyBasket={(basket) => {
+                      setBasketToModify(basket); // Guardamos la canasta elegida
+                      setActiveAiTab("generar"); // Cambiamos a la pestaña de Nueva Consulta
+                    }} 
+                  />
+                )}
+              </div>
+              
             </div>
           )}
         </div>

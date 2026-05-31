@@ -1,5 +1,5 @@
 """
-Servicio — Sprint 4: Interacción con los Puestos
+Servicio — Sprint 4: Interacción con los Puestos (con autenticación por JWT local)
 Toda la lógica de negocio separada del router.
 HU-14: Calificar la atención
 HU-15: Verificar transparencia
@@ -16,6 +16,8 @@ from app.models.interaccion import (
     DenunciarRequest, DenunciarResponse,
     AgregarFavoritoResponse, EliminarFavoritoResponse,
     ListaFavoritosResponse, FavoritoResponse,
+    ListaCalificacionesResponse, CalificacionUsuarioResponse,
+    ListaInteraccionesResponse, InteraccionResponse,
 )
 
 # Umbral de sobreprecio definido en RN-02 del documento
@@ -29,25 +31,25 @@ UMBRAL_SOBREPRECIO = 0.10  # 10%
 async def calificar_puesto(
     puesto_id: str,
     data: CalificarRequest,
-    db: Client
+    supabase: Client,
+    user_id: str,          # ID del usuario autenticado (obtenido del token)
 ) -> CalificarResponse:
     """
     Guarda la calificación del usuario en calificaciones
     y recalcula el promedio del puesto en puestos_venta.
     Regla: un usuario solo puede calificar una vez por puesto.
     """
-
     # 1. Verificar que el puesto existe
-    puesto = db.table("puestos_venta").select("id").eq("id", puesto_id).maybe_single().execute()
+    puesto = supabase.table("puestos_venta").select("id").eq("id", puesto_id).maybe_single().execute()
     if not puesto.data:
         raise HTTPException(status_code=404, detail="Puesto no encontrado")
 
     # 2. Verificar que el usuario no haya calificado ya este puesto
     existente = (
-        db.table("calificaciones")
+        supabase.table("calificaciones")
         .select("id")
         .eq("puesto_id", int(puesto_id))
-        .eq("usuario_id", str(data.usuario_id))
+        .eq("usuario_id", user_id)
         .maybe_single()
         .execute()
     )
@@ -60,11 +62,11 @@ async def calificar_puesto(
     # 3. Insertar la calificación
     nueva_calificacion = {
         "puesto_id": int(puesto_id),
-        "usuario_id": str(data.usuario_id),
+        "usuario_id": user_id,
         "estrellas": data.estrellas,
         "comentario": data.comentario,
     }
-    resultado = db.table("calificaciones").insert(nueva_calificacion).execute()
+    resultado = supabase.table("calificaciones").insert(nueva_calificacion).execute()
     data_list: List[Dict[str, Any]] = cast(List[Dict[str, Any]], resultado.data)
     if not data_list or len(data_list) == 0:
         raise HTTPException(status_code=500, detail="Error al guardar la calificación")
@@ -72,7 +74,7 @@ async def calificar_puesto(
 
     # 4. Recalcular el promedio del puesto
     todas = (
-        db.table("calificaciones")
+        supabase.table("calificaciones")
         .select("estrellas")
         .eq("puesto_id", int(puesto_id))
         .execute()
@@ -85,6 +87,9 @@ async def calificar_puesto(
         total = len(data_list)
         ratings_values = [float(r["estrellas"]) for r in data_list if r.get("estrellas") is not None]
         promedio = round(sum(ratings_values) / len(ratings_values), 2) if ratings_values else float(data.estrellas)
+
+    # Actualizar calificacion_promedio en puestos_venta
+    supabase.table("puestos_venta").update({"calificacion_promedio": promedio}).eq("id", int(puesto_id)).execute()
 
     return CalificarResponse(
         mensaje="Calificación registrada exitosamente",
@@ -101,17 +106,17 @@ async def calificar_puesto(
 async def verificar_transparencia(
     puesto_id: str,
     data: VerificarPrecioRequest,
-    db: Client
+    supabase: Client,
+    user_id: str,          # aunque esta función no guarda el usuario, lo recibimos por consistencia
 ) -> VerificarPrecioResponse:
     """
     Compara el precio pagado por el usuario con el precio publicado
     en stock_vendedora. Actualiza el indicador de confianza del puesto.
     Regla RN-02: alerta si el precio supera el 10% del precio de referencia.
     """
-
     # 1. Obtener el precio publicado del producto en ese puesto
     precio_pub = (
-        db.table("stock_vendedora")
+        supabase.table("stock_vendedora")
         .select("precio_actual")
         .eq("puesto_id", int(puesto_id))
         .eq("producto_id", data.producto_id)
@@ -133,7 +138,7 @@ async def verificar_transparencia(
 
     # 3. Obtener precio referencial del gobierno para comparación
     precio_ref = (
-        db.table("precios_referenciales")
+        supabase.table("precios_referenciales")
         .select("precio_referencial_gob")
         .eq("producto_id", data.producto_id)
         .order("fecha_vigencia", desc=True)
@@ -146,6 +151,9 @@ async def verificar_transparencia(
     # 4. Calcular indicador de transparencia del puesto
     variacion = round((precio_publicado - precio_referencial) / precio_referencial * 100, 2) if precio_referencial > 0 else 0
     indicador = max(0, 100.0 - abs(variacion))
+
+    # (Opcional) Guardar la verificación en una tabla de verificaciones (para historial)
+    # Aquí podrías insertar en verificaciones_precios si creaste esa tabla.
 
     return VerificarPrecioResponse(
         mensaje="Verificación registrada correctamente",
@@ -164,23 +172,21 @@ async def verificar_transparencia(
 async def denunciar_sobreprecio(
     puesto_id: str,
     data: DenunciarRequest,
-    db: Client
+    supabase: Client,
+    user_id: str,
 ) -> DenunciarResponse:
     """
     Registra una denuncia de sobreprecio en la tabla denuncias_sobreprecio.
-    Si hay evidencia (foto), la guarda en denuncia_evidencias.
-    Regla RN-01: permite reporte anónimo.
-    Regla RN-02: genera alerta si supera el 10%.
+    El usuario autenticado es el denunciante.
     """
-
     # 1. Verificar que el puesto existe
-    puesto = db.table("puestos_venta").select("id").eq("id", puesto_id).maybe_single().execute()
+    puesto = supabase.table("puestos_venta").select("id").eq("id", puesto_id).maybe_single().execute()
     if not puesto.data:
         raise HTTPException(status_code=404, detail="Puesto no encontrado")
 
     # 2. Obtener precio actual del producto en el puesto (si existe)
     precio_stock = (
-        db.table("stock_vendedora")
+        supabase.table("stock_vendedora")
         .select("precio_actual")
         .eq("puesto_id", int(puesto_id))
         .eq("producto_id", data.producto_id)
@@ -188,7 +194,6 @@ async def denunciar_sobreprecio(
         .execute()
     )
     if not precio_stock.data:
-        # No existe ese producto en el stock del puesto → no se puede denunciar
         raise HTTPException(
             status_code=404,
             detail="El producto no se encuentra registrado en el stock del puesto. No es posible realizar la denuncia."
@@ -197,7 +202,7 @@ async def denunciar_sobreprecio(
 
     # 3. Obtener precio referencial del gobierno (opcional)
     precio_ref = (
-        db.table("precios_referenciales")
+        supabase.table("precios_referenciales")
         .select("precio_referencial_gob")
         .eq("producto_id", data.producto_id)
         .order("fecha_vigencia", desc=True)
@@ -214,14 +219,14 @@ async def denunciar_sobreprecio(
 
     # 5. Insertar la denuncia
     nueva_denuncia = {
-        "usuario_id": str(data.usuario_id) if data.usuario_id else None,
+        "usuario_id": user_id,
         "puesto_id": int(puesto_id),
         "producto_id": data.producto_id,
         "precio_detectado": data.precio_cobrado,
         "comentario": data.motivo,
         "estado": "Pendiente",
     }
-    resultado = db.table("denuncias_sobreprecio").insert(nueva_denuncia).execute()
+    resultado = supabase.table("denuncias_sobreprecio").insert(nueva_denuncia).execute()
     data_list = cast(List[Dict[str, Any]], resultado.data)
     if not data_list or len(data_list) == 0:
         raise HTTPException(status_code=500, detail="Error al guardar la denuncia")
@@ -242,36 +247,34 @@ async def denunciar_sobreprecio(
 
 async def agregar_favorito(
     puesto_id: str,
-    usuario_id: str,
-    db: Client
+    supabase: Client,
+    user_id: str,
 ) -> AgregarFavoritoResponse:
-    # Convertir puesto_id a entero
     try:
         puesto_int = int(puesto_id)
     except ValueError:
         raise HTTPException(status_code=400, detail="El ID del puesto debe ser un número entero")
     
     # Verificar que el puesto existe
-    puesto = db.table("puestos_venta").select("id").eq("id", puesto_int).maybe_single().execute()
+    puesto = supabase.table("puestos_venta").select("id").eq("id", puesto_int).maybe_single().execute()
     if puesto is None or not puesto.data:
         raise HTTPException(status_code=404, detail="Puesto no encontrado")
     
     # Verificar duplicado
     existente = (
-        db.table("puestos_favoritos")
+        supabase.table("puestos_favoritos")
         .select("id")
-        .eq("usuario_id", usuario_id)
+        .eq("usuario_id", user_id)
         .eq("puesto_id", puesto_int)
         .maybe_single()
         .execute()
     )
-    # existente puede ser None (sin filas) o un objeto con data
     if existente is not None and existente.data:
         raise HTTPException(status_code=409, detail="El puesto ya está en favoritos")
     
     # Insertar
-    resultado = db.table("puestos_favoritos").insert({
-        "usuario_id": usuario_id,
+    resultado = supabase.table("puestos_favoritos").insert({
+        "usuario_id": user_id,
         "puesto_id": puesto_int,
     }).execute()
     
@@ -284,19 +287,16 @@ async def agregar_favorito(
     )
 
 
-    
 async def eliminar_favorito(
     puesto_id: str,
-    usuario_id: str,
-    db: Client
+    supabase: Client,
+    user_id: str,
 ) -> EliminarFavoritoResponse:
-    """Elimina un puesto de la lista de favoritos del usuario."""
-
     resultado = (
-        db.table("puestos_favoritos")
+        supabase.table("puestos_favoritos")
         .delete()
         .eq("puesto_id", int(puesto_id))
-        .eq("usuario_id", usuario_id)
+        .eq("usuario_id", user_id)
         .execute()
     )
     if not resultado.data or len(resultado.data) == 0:
@@ -306,17 +306,11 @@ async def eliminar_favorito(
 
 
 async def listar_favoritos(
-    usuario_id: str,
-    db: Client
+    supabase: Client,
+    user_id: str,
 ) -> ListaFavoritosResponse:
-    """
-    Lista todos los puestos favoritos del usuario
-    con su información básica y rating actual.
-    """
-
-    # Obtener favoritos con JOIN a puestos_venta y mercados
     favoritos_raw = (
-        db.table("puestos_favoritos")
+        supabase.table("puestos_favoritos")
         .select("""
             puesto_id,
             puestos_venta (
@@ -325,7 +319,7 @@ async def listar_favoritos(
                 mercados ( nombre )
             )
         """)
-        .eq("usuario_id", usuario_id)
+        .eq("usuario_id", user_id)
         .execute()
     )
 
@@ -338,7 +332,7 @@ async def listar_favoritos(
 
         # Calcular rating promedio del puesto
         ratings = (
-            db.table("calificaciones")
+            supabase.table("calificaciones")
             .select("estrellas")
             .eq("puesto_id", int(fav.get("puesto_id", 0)))
             .not_.is_("estrellas", "null")
@@ -362,18 +356,11 @@ async def listar_favoritos(
 
 
 async def obtener_calificaciones_usuario(
-    usuario_id: str,
-    db: Client
-):
-    """
-    Obtiene todas las calificaciones que el usuario ha hecho.
-    Retorna información del puesto y la calificación.
-    """
-    from app.models.interaccion import ListaCalificacionesResponse, CalificacionUsuarioResponse
-    
-    # Obtener calificaciones del usuario con información del puesto
+    supabase: Client,
+    user_id: str,
+) -> ListaCalificacionesResponse:
     calificaciones_raw = (
-        db.table("calificaciones")
+        supabase.table("calificaciones")
         .select("""
             puesto_id,
             estrellas,
@@ -384,7 +371,7 @@ async def obtener_calificaciones_usuario(
                 nombre_puesto
             )
         """)
-        .eq("usuario_id", usuario_id)
+        .eq("usuario_id", user_id)
         .order("fecha_registro", desc=True)
         .execute()
     )
@@ -393,7 +380,6 @@ async def obtener_calificaciones_usuario(
     cal_list: List[Dict[str, Any]] = cast(List[Dict[str, Any]], calificaciones_raw.data) if calificaciones_raw.data else []
     for cal in cal_list:
         puesto: Dict[str, Any] = cal.get("puestos_venta", {}) if isinstance(cal, dict) else {}
-        
         calificaciones.append(CalificacionUsuarioResponse(
             puesto_id=int(cal.get("puesto_id", 0)),
             nombre_puesto=puesto.get("nombre_puesto", "Sin nombre") if isinstance(puesto, dict) else "Sin nombre",
@@ -407,21 +393,14 @@ async def obtener_calificaciones_usuario(
 
 # ─────────────────────────────────────────────
 # Interacciones — Vista unificada
-# Vista: vista_interacciones (calificaciones + denuncias)
 # ─────────────────────────────────────────────
 
 async def obtener_interacciones_puesto(
     puesto_id: str,
-    db: Client
-):
-    """
-    Obtiene todas las interacciones (calificaciones y denuncias) de un puesto
-    desde la vista vista_interacciones, ordenadas por fecha descendente.
-    """
-    from app.models.interaccion import ListaInteraccionesResponse, InteraccionResponse
-    
+    supabase: Client,
+) -> ListaInteraccionesResponse:
     interacciones_raw = (
-        db.table("vista_interacciones")
+        supabase.table("vista_interacciones")
         .select("*")
         .eq("puesto_id", int(puesto_id))
         .order("fecha", desc=True)
@@ -430,7 +409,6 @@ async def obtener_interacciones_puesto(
     
     interacciones = []
     inter_list: List[Dict[str, Any]] = cast(List[Dict[str, Any]], interacciones_raw.data) if interacciones_raw.data else []
-    
     for inter in inter_list:
         interacciones.append(InteraccionResponse(
             tipo=inter.get("tipo", ""),
@@ -448,26 +426,19 @@ async def obtener_interacciones_puesto(
 
 
 async def obtener_interacciones_usuario(
-    usuario_id: str,
-    db: Client
-):
-    """
-    Obtiene todas las interacciones (calificaciones y denuncias) que ha hecho un usuario
-    desde la vista vista_interacciones, ordenadas por fecha descendente.
-    """
-    from app.models.interaccion import ListaInteraccionesResponse, InteraccionResponse
-    
+    supabase: Client,
+    user_id: str,
+) -> ListaInteraccionesResponse:
     interacciones_raw = (
-        db.table("vista_interacciones")
+        supabase.table("vista_interacciones")
         .select("*")
-        .eq("usuario_id", usuario_id)
+        .eq("usuario_id", user_id)
         .order("fecha", desc=True)
         .execute()
     )
     
     interacciones = []
     inter_list: List[Dict[str, Any]] = cast(List[Dict[str, Any]], interacciones_raw.data) if interacciones_raw.data else []
-    
     for inter in inter_list:
         interacciones.append(InteraccionResponse(
             tipo=inter.get("tipo", ""),

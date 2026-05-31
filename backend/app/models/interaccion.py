@@ -1,5 +1,5 @@
 """
-Modelos Pydantic — Sprint 4: Interacción con los Puestos
+Modelos Pydantic — Sprint 4: Interacción con los Puestos (con RLS)
 HU-14: Calificar la atención
 HU-15: Verificar transparencia
 HU-16: Denunciar sobreprecio
@@ -13,11 +13,10 @@ from datetime import datetime
 
 # ─────────────────────────────────────────────
 # HU-14 │ Calificar la atención
-# Tabla: calificaciones
 # ─────────────────────────────────────────────
 
 class CalificarRequest(BaseModel):
-    usuario_id: UUID4
+    usuario_id: Optional[UUID4] = Field(None, description="Opcional: se obtiene del token")
     estrellas: int = Field(..., ge=1, le=5, description="Calificación de 1 a 5 estrellas")
     comentario: Optional[str] = Field(None, max_length=500)
 
@@ -30,11 +29,10 @@ class CalificarResponse(BaseModel):
 
 # ─────────────────────────────────────────────
 # HU-15 │ Verificar transparencia
-# Tabla: stock_vendedora + precios_referenciales
 # ─────────────────────────────────────────────
 
 class VerificarPrecioRequest(BaseModel):
-    usuario_id: UUID4
+    usuario_id: Optional[UUID4] = None
     producto_id: int
     precio_pagado: float = Field(..., gt=0, description="Precio que el usuario pagó en el puesto")
     es_correcto: bool = Field(..., description="¿El precio pagado coincide con el publicado?")
@@ -44,33 +42,31 @@ class VerificarPrecioResponse(BaseModel):
     precio_publicado: float
     precio_pagado: float
     diferencia_porcentaje: float
-    indicador_transparencia: float   # promedio de verificaciones del puesto (0-100%)
-    es_sobreprecio: bool             # True si excede el 10% del precio publicado
+    indicador_transparencia: float
+    es_sobreprecio: bool
 
 
 # ─────────────────────────────────────────────
 # HU-16 │ Denunciar sobreprecio
-# Tablas: denuncias_sobreprecio
 # ─────────────────────────────────────────────
 
 class DenunciarRequest(BaseModel):
-    usuario_id: UUID4
+    usuario_id: Optional[UUID4] = None
     producto_id: int
-    precio_cobrado: float = Field(..., gt=0, description="Precio que le cobraron")
-    motivo: str = Field(..., min_length=5, max_length=200, description="Descripción del sobreprecio")
-    url_evidencia: Optional[str] = Field(None, description="URL de foto como evidencia (opcional)")
+    precio_cobrado: float = Field(..., gt=0)
+    motivo: str = Field(..., min_length=5, max_length=200)
+    url_evidencia: Optional[str] = None
 
 class DenunciarResponse(BaseModel):
     mensaje: str
     denuncia_id: str
-    diferencia_detectada: float      # diferencia en Bs. vs precio de referencia
-    porcentaje_exceso: float         # % que supera el precio de referencia
-    alerta_generada: bool            # True si supera el 10% (RN-02)
+    diferencia_detectada: float
+    porcentaje_exceso: float
+    alerta_generada: bool
 
 
 # ─────────────────────────────────────────────
 # HU-17 │ Agendar favoritos
-# Tabla: puestos_favoritos
 # ─────────────────────────────────────────────
 
 class FavoritoResponse(BaseModel):
@@ -81,7 +77,7 @@ class FavoritoResponse(BaseModel):
     es_favorito: bool
 
 class AgregarFavoritoRequest(BaseModel):
-    usuario_id: UUID4
+    usuario_id: Optional[UUID4] = None
 
 class AgregarFavoritoResponse(BaseModel):
     mensaje: str
@@ -96,8 +92,7 @@ class ListaFavoritosResponse(BaseModel):
 
 
 # ─────────────────────────────────────────────
-# Calificaciones — Obtener del usuario
-# Tabla: calificaciones
+# Calificaciones del usuario
 # ─────────────────────────────────────────────
 
 class CalificacionUsuarioResponse(BaseModel):
@@ -113,20 +108,19 @@ class ListaCalificacionesResponse(BaseModel):
 
 
 # ─────────────────────────────────────────────
-# Interacciones — Vista unificada
-# Vista: vista_interacciones (calificaciones + denuncias)
+# Interacciones (vista unificada)
 # ─────────────────────────────────────────────
 
 class InteraccionResponse(BaseModel):
-    tipo: str                       # 'calificacion' o 'denuncia'
+    tipo: str
     interaccion_id: int
     puesto_id: int
     usuario_id: str
-    puntuacion: Optional[int]       # Solo para calificaciones
-    texto: str                      # comentario para calificaciones, motivo para denuncias
+    puntuacion: Optional[int]
+    texto: str
     fecha: datetime
-    precio_detectado: Optional[float]  # Solo para denuncias
-    estado: Optional[str]           # Solo para denuncias
+    precio_detectado: Optional[float]
+    estado: Optional[str]
 
 class ListaInteraccionesResponse(BaseModel):
     total: int
