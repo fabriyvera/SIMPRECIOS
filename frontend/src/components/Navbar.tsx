@@ -46,12 +46,9 @@ export function Navbar({
       <div className="bg-gradient-to-r from-orange-500 via-red-500 to-pink-500 text-white py-4 px-4 shadow-lg sticky top-0 z-40">
         <div className="flex items-center justify-between">
           <div className="flex items-center gap-2">
-            <div className="bg-white/20 p-2 rounded-xl backdrop-blur-sm">
-              <Store className="w-5 h-5" />
-            </div>
             <div>
               <h1 className="text-lg font-bold mb-0 text-white drop-shadow-lg">
-                🏪 Mercados Locales
+                Mercados Locales
               </h1>
               <p className="text-xs text-white/80">Bolivia</p>
             </div>

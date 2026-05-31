@@ -8,7 +8,6 @@ security = HTTPBearer()
 def get_current_user(credentials: HTTPAuthorizationCredentials = Depends(security)):
     token = credentials.credentials
     try:
-        # Validamos el token con el service key (solo para get_user, no para queries)
         client = create_client(settings.SUPABASE_URL, settings.SUPABASE_SERVICE_KEY)
         user = client.auth.get_user(token)
         if not user or not user.user:
@@ -21,3 +20,5 @@ def get_current_user(credentials: HTTPAuthorizationCredentials = Depends(securit
         }
     except Exception as e:
         raise HTTPException(status_code=401, detail=f"No autenticado: {str(e)}")
+    
+    

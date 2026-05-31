@@ -36,27 +36,22 @@ interface HomeClientProps {
 }
 
 export default function HomeClient({ initialMarkets }: HomeClientProps) {
-  // ── Cliente Supabase ──
   const supabase = createClient();
 
-  // ── Estados de autenticación ──
   const [sessionUser, setSessionUser] = useState<SessionUser | null>(null);
   const [userRole, setUserRole] = useState<"Vendedora" | "Comprador">("Comprador");
   const [initialLoadComplete, setInitialLoadComplete] = useState(false);
 
-  // ── Estados de interfaz ──
   const [currentView, setCurrentView] = useState<AppView>("home");
   const [isVendorMode, setIsVendorMode] = useState(false);
   const [selectedVendorMarket, setSelectedVendorMarket] = useState<string | null>(null);
 
-  // ── Estados de datos ──
   const [markets, setMarkets] = useState<Market[]>(
     initialMarkets && initialMarkets.length > 0 ? initialMarkets : INITIAL_MARKETS,
   );
   const [vendorMarkets, setVendorMarkets] = useState<Market[]>([]); // puestos del vendedor logueado
   const [calificacionesPorPuesto, setCalificacionesPorPuesto] = useState<Record<string, number>>({});
 
-  // ── Filtros ──
   const [searchTerm, setSearchTerm] = useState("");
   const [selectedCategory, setSelectedCategory] = useState("all");
   const [selectedMarketLocation, setSelectedMarketLocation] = useState("all");
@@ -67,7 +62,8 @@ export default function HomeClient({ initialMarkets }: HomeClientProps) {
   const [favoriteMarketIds, setFavoriteMarketIds] = useState<string[]>([]);
   const [activeAiTab, setActiveAiTab] = useState<"generar" | "guardadas">("generar");
   const [basketToModify, setBasketToModify] = useState<any>(null);
-  // ── Geolocalización ──
+
+  // Geolocalización 
   useEffect(() => {
     if (!("geolocation" in navigator)) return;
     navigator.geolocation.getCurrentPosition(
@@ -77,7 +73,7 @@ export default function HomeClient({ initialMarkets }: HomeClientProps) {
     );
   }, []);
 
-  // ── OBTENER USUARIO Y PERFIL (Solo Supabase, sin backend para perfiles) ──
+  // OBTENER USUARIO Y PERFIL 
   useEffect(() => {
     const getAuthUser = async () => {
       const { data: { session } } = await supabase.auth.getSession();
@@ -100,7 +96,6 @@ export default function HomeClient({ initialMarkets }: HomeClientProps) {
           });
           setUserRole(profile.rol);
 
-          // Si es vendedora, cargar sus puestos desde el backend
           if (profile.rol === "Vendedora") {
             try {
               const res = await fetch(`http://localhost:8000/api/prices/vendor-puestos/${userId}`);
@@ -118,7 +113,6 @@ export default function HomeClient({ initialMarkets }: HomeClientProps) {
             setIsVendorMode(false);
           }
         } else {
-          // Crear perfil por defecto (Comprador)
           const { data: newProfile } = await supabase
             .from("profiles")
             .insert({
@@ -152,7 +146,6 @@ export default function HomeClient({ initialMarkets }: HomeClientProps) {
 
     getAuthUser();
 
-    // Escuchar cambios de autenticación
     const { data: { subscription } } = supabase.auth.onAuthStateChange((event, session) => {
       if (event === "SIGNED_IN" || event === "TOKEN_REFRESHED") {
         getAuthUser();
@@ -168,7 +161,7 @@ export default function HomeClient({ initialMarkets }: HomeClientProps) {
     return () => subscription.unsubscribe();
   }, []);
 
-  // ── Sincronizar mercados (stock) desde el backend ──
+  // Sincronizar del stock de los mercados 
   useEffect(() => {
     const syncWithDatabase = async () => {
       try {
@@ -216,14 +209,12 @@ export default function HomeClient({ initialMarkets }: HomeClientProps) {
 
         setMarkets(mappedMarkets);
 
-        // Si hay sesión y es vendedora, actualizar vendorMarkets por si no se cargaron antes
         if (sessionUser?.rol === "Vendedora") {
           const res = await fetch(`http://localhost:8000/api/prices/vendor-puestos/${sessionUser.id}`);
           if (res.ok) {
             const puestos = await res.json();
             setVendorMarkets(puestos);
           } else {
-            // Fallback local por UUID
             const misPuestos = mappedMarkets.filter((m: any) => m.vendorId === sessionUser.id);
             if (misPuestos.length) setVendorMarkets(misPuestos);
           }
@@ -236,19 +227,19 @@ export default function HomeClient({ initialMarkets }: HomeClientProps) {
     syncWithDatabase();
   }, [sessionUser?.id]);
 
-// ── Cargar favoritos y calificaciones del usuario ──
+// Cargar favoritos y calificaciones del usuario
   useEffect(() => {
     const loadUserData = async () => {
       if (!sessionUser?.id) return;
       try {
-        // 👇 Obtener el token JWT de la sesión activa
+        // Obtener el token JWT de la sesión activa
         const { data: { session } } = await supabase.auth.getSession();
         const token = session?.access_token;
         if (!token) return;
 
         const headers = { "Authorization": `Bearer ${token}` };
 
-        // Calificaciones — sin query params, el backend usa el token
+        // Calificaciones
         const calRes = await fetch(`http://localhost:8000/interaccion/calificaciones`, { headers });
         if (calRes.ok) {
           const calData = await calRes.json();
@@ -332,8 +323,6 @@ export default function HomeClient({ initialMarkets }: HomeClientProps) {
   const handleToggleFavorite = async (marketId: string) => {
     const isFavorite = favoriteMarketIds.includes(marketId);
     let newFavs: string[];
-
-    // 👇 Obtener token antes de cualquier fetch
     const { data: { session } } = await supabase.auth.getSession();
     const token = session?.access_token;
     const headers: Record<string, string> = token
@@ -362,7 +351,6 @@ export default function HomeClient({ initialMarkets }: HomeClientProps) {
   };
 
   const handleReportOverprice = (marketId: string, report: any) => {
-    // No hay estado global necesario, se maneja en MarketGrid
     console.log("Reporte de sobreprecio", { marketId, report });
   };
 
@@ -421,7 +409,7 @@ export default function HomeClient({ initialMarkets }: HomeClientProps) {
     return [];
   }, [vendorMarkets, markets, sessionUser?.id]);
 
-  // ── Pantalla de carga inicial ──
+  // Pantalla de carga inicial
   if (!initialLoadComplete) {
     return (
       <div className="min-h-screen bg-gray-50 flex flex-col items-center justify-center p-4">
@@ -431,14 +419,14 @@ export default function HomeClient({ initialMarkets }: HomeClientProps) {
     );
   }
 
-  // ── Vistas de autenticación ──
+  // Vistas de autenticación
   if (currentView === "login") return <LoginView onViewChange={handleViewChange} />;
   if (currentView === "registro") return <RegisterView onViewChange={handleViewChange} />;
   if (currentView === "recuperar") return <RecoverView onViewChange={handleViewChange} />;
   if (currentView === "verificar") return <VerifyView onViewChange={handleViewChange} />;
   if (currentView === "perfil") return <ProfileView onViewChange={handleViewChange} />;
 
-  // ── Panel de vendedor (detalle de un puesto) ──
+  // Panel de vendedor (detalle de un puesto)
   if (isVendorMode && selectedVendorMarket) {
     const market = vendorFilteredMarkets.find(m => m.id === selectedVendorMarket);
     if (market) {
@@ -503,7 +491,7 @@ export default function HomeClient({ initialMarkets }: HomeClientProps) {
     }
   }
 
-  // ── Lista de puestos del vendedor (para seleccionar uno) ──
+  // Lista de puestos del vendedor
   if (isVendorMode) {
     return (
       <div className="min-h-screen bg-background pb-20">
@@ -532,7 +520,7 @@ export default function HomeClient({ initialMarkets }: HomeClientProps) {
             ))}
             {vendorFilteredMarkets.length === 0 && (
               <div className="col-span-full text-center py-12 text-gray-500 bg-white rounded-xl border border-dashed p-6">
-                ⚠️ No tienes ningún puesto asignado actualmente.
+                No tienes ningún puesto asignado actualmente.
               </div>
             )}
           </div>
@@ -541,7 +529,7 @@ export default function HomeClient({ initialMarkets }: HomeClientProps) {
     );
   }
 
-  // ── Vista comprador (home, mapa, AI) ──
+  // Vista comprador
   return (
     <ToastProvider>
       <div className="min-h-screen bg-background pb-20">
@@ -591,11 +579,10 @@ export default function HomeClient({ initialMarkets }: HomeClientProps) {
               />
             </>
           )}
+
           {currentView === "map" && <MapView markets={finalMarkets} userLocation={userLocation} />}
           {currentView === "ai" && (
             <div className="max-w-2xl mx-auto w-full flex flex-col gap-4">
-              
-              {/* Selector de Pestañas (Tabs) Elegante */}
               <div className="bg-slate-100/80 backdrop-blur-sm p-1.5 rounded-2xl flex mx-4 border border-slate-200/60 shadow-sm mt-2">
                 <button
                   onClick={() => setActiveAiTab("generar")}
@@ -621,19 +608,18 @@ export default function HomeClient({ initialMarkets }: HomeClientProps) {
                 </button>
               </div>
 
-              {/* Renderizado Condicional Animado */}
               <div className="animate-in fade-in zoom-in-95 duration-300">
                 {activeAiTab === "generar" ? (
                   <AIBasket 
                     markets={markets} 
-                    initialData={basketToModify} // <-- Enviamos los datos pre-cargados
+                    initialData={basketToModify} 
                   />
                 ) : (
                   <SavedBaskets 
                     markets={markets} 
                     onModifyBasket={(basket) => {
-                      setBasketToModify(basket); // Guardamos la canasta elegida
-                      setActiveAiTab("generar"); // Cambiamos a la pestaña de Nueva Consulta
+                      setBasketToModify(basket);
+                      setActiveAiTab("generar");
                     }} 
                   />
                 )}

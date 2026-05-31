@@ -1,4 +1,3 @@
-# app/routers/stock.py
 from fastapi import APIRouter, HTTPException
 from app.database import get_db
 
@@ -35,13 +34,16 @@ async def get_markets_with_stock():
             """)\
             .execute()
         
-        print(f"📊 Total de puestos: {len(result.data) if result.data else 0}")
+        print(f"Total de puestos: {len(result.data) if result.data else 0}")
         if result.data:
             for puesto in result.data[:2]:
-                stock_count = len(puesto.get("stock_vendedora", []) or [])
-                print(f"   - {puesto.get('nombre_puesto')}: {stock_count} productos en stock")
+                if isinstance(puesto, dict):
+                    stock_vendedora = puesto.get("stock_vendedora", [])
+                    stock_count = len(stock_vendedora) if isinstance(stock_vendedora, list) else 0
+                    nombre_puesto = puesto.get('nombre_puesto', 'N/A')
+                    print(f"   - {nombre_puesto}: {stock_count} productos en stock")
             
         return result.data
     except Exception as e:
-        print(f"\n🚨 Error en el GET de mercados relacionales: {str(e)}")
+        print(f"\nError en el GET de mercados relacionales: {str(e)}")
         raise HTTPException(status_code=500, detail=str(e))

@@ -1,7 +1,6 @@
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from app.routers import interaccion, auth
-# ── ADICIÓN: Importamos los routers específicos de tu Sprint 2 ──────────
 from app.routers import prices, stock 
 
 app = FastAPI(
@@ -19,15 +18,9 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-# ── Routers por Sprint ─────────────────────────────────────
-# Autenticación (Común a todos)
 app.include_router(auth.router)
-
-# Sprint 2 (Módulo de Precios e Inventario - Tu Alcance)
 app.include_router(prices.router, prefix="/api/prices", tags=["Precios"])
 app.include_router(stock.router, prefix="/api/stock", tags=["Inventario"])
-
-# Sprint 4 (Otros módulos)
 app.include_router(interaccion.router)   
 
 
