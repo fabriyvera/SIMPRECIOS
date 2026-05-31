@@ -12,7 +12,7 @@ HU-17 │ GET    /interaccion/favoritos
 
 from fastapi import APIRouter, Depends
 from supabase import Client
-from app.database import get_db
+from app.database import get_authed_db, get_db
 from app.dependencies import get_current_user
 from app.models.interaccion import (
     CalificarRequest, CalificarResponse,
@@ -35,9 +35,9 @@ router = APIRouter(prefix="/interaccion", tags=["Interacción con los Puestos"])
 async def calificar_puesto(
     puesto_id: str,
     data: CalificarRequest,
-    supabase: Client = Depends(get_db),
     current_user: dict = Depends(get_current_user)
 ):
+    supabase = get_authed_db(current_user["token"])
     return await service.calificar_puesto(puesto_id, data, supabase, current_user["id"])
 
 
@@ -48,11 +48,10 @@ async def calificar_puesto(
 async def verificar_transparencia(
     puesto_id: str,
     data: VerificarPrecioRequest,
-    supabase: Client = Depends(get_db),
     current_user: dict = Depends(get_current_user)
 ):
+    supabase = get_authed_db(current_user["token"])
     return await service.verificar_transparencia(puesto_id, data, supabase, current_user["id"])
-
 
 # ─────────────────────────────────────────────
 # HU-16 │ Denunciar sobreprecio
@@ -61,11 +60,10 @@ async def verificar_transparencia(
 async def denunciar_sobreprecio(
     puesto_id: str,
     data: DenunciarRequest,
-    supabase: Client = Depends(get_db),
     current_user: dict = Depends(get_current_user)
 ):
+    supabase = get_authed_db(current_user["token"])
     return await service.denunciar_sobreprecio(puesto_id, data, supabase, current_user["id"])
-
 
 # ─────────────────────────────────────────────
 # HU-17 │ Agregar favorito
@@ -73,10 +71,11 @@ async def denunciar_sobreprecio(
 @router.post("/favoritos/{puesto_id}", response_model=AgregarFavoritoResponse)
 async def agregar_favorito(
     puesto_id: str,
-    supabase: Client = Depends(get_db),
     current_user: dict = Depends(get_current_user)
 ):
+    supabase = get_authed_db(current_user["token"])
     return await service.agregar_favorito(puesto_id, supabase, current_user["id"])
+
 
 
 # ─────────────────────────────────────────────
@@ -85,20 +84,19 @@ async def agregar_favorito(
 @router.delete("/favoritos/{puesto_id}", response_model=EliminarFavoritoResponse)
 async def eliminar_favorito(
     puesto_id: str,
-    supabase: Client = Depends(get_db),
     current_user: dict = Depends(get_current_user)
 ):
+    supabase = get_authed_db(current_user["token"])
     return await service.eliminar_favorito(puesto_id, supabase, current_user["id"])
-
 
 # ─────────────────────────────────────────────
 # HU-17 │ Listar favoritos
 # ─────────────────────────────────────────────
 @router.get("/favoritos", response_model=ListaFavoritosResponse)
 async def listar_favoritos(
-    supabase: Client = Depends(get_db),
     current_user: dict = Depends(get_current_user)
 ):
+    supabase = get_authed_db(current_user["token"])
     return await service.listar_favoritos(supabase, current_user["id"])
 
 
@@ -107,11 +105,10 @@ async def listar_favoritos(
 # ─────────────────────────────────────────────
 @router.get("/calificaciones", response_model=ListaCalificacionesResponse)
 async def obtener_calificaciones(
-    supabase: Client = Depends(get_db),
     current_user: dict = Depends(get_current_user)
 ):
+    supabase = get_authed_db(current_user["token"])
     return await service.obtener_calificaciones_usuario(supabase, current_user["id"])
-
 
 # ─────────────────────────────────────────────
 # Interacciones de un puesto (comentarios)
@@ -119,10 +116,10 @@ async def obtener_calificaciones(
 @router.get("/puestos/{puesto_id}/interacciones", response_model=ListaInteraccionesResponse)
 async def obtener_interacciones_puesto(
     puesto_id: str,
-    supabase: Client = Depends(get_db),
     # No se necesita usuario autenticado para ver comentarios,
     # pero igual usamos get_db (anon key) y no requerimos token
 ):
+    supabase = get_db()
     return await service.obtener_interacciones_puesto(puesto_id, supabase)
 
 
@@ -131,7 +128,7 @@ async def obtener_interacciones_puesto(
 # ─────────────────────────────────────────────
 @router.get("/usuario/interacciones", response_model=ListaInteraccionesResponse)
 async def obtener_mis_interacciones(
-    supabase: Client = Depends(get_db),
     current_user: dict = Depends(get_current_user)
 ):
+    supabase = get_authed_db(current_user["token"])
     return await service.obtener_interacciones_usuario(supabase, current_user["id"])

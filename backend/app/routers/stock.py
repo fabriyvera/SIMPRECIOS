@@ -8,8 +8,6 @@ router = APIRouter()
 async def get_markets_with_stock():
     try:
         supabase = get_db()
-        
-        # ── 🎯 CORRECCIÓN: Agregamos vendedora_id al select relacional ──
         result = supabase.table("puestos_venta")\
             .select("""
                 id,
