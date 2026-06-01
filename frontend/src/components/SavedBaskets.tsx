@@ -8,11 +8,11 @@ import { Market } from "@/types";
 
 interface SavedBasketsProps {
   markets: Market[];
-  // NUEVO: Propiedad para avisarle a HomeClient que queremos modificar
+  userId?: string;
   onModifyBasket?: (basket: any) => void; 
 }
 
-export function SavedBaskets({ markets, onModifyBasket }: SavedBasketsProps) {
+export function SavedBaskets({ markets, userId,onModifyBasket }: SavedBasketsProps) {
   const [baskets, setBaskets] = useState<any[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [recalculatingId, setRecalculatingId] = useState<string | null>(null);
@@ -20,18 +20,24 @@ export function SavedBaskets({ markets, onModifyBasket }: SavedBasketsProps) {
 
   useEffect(() => {
     fetchBaskets();
-  }, []);
+  }, [userId]);
 
   const fetchBaskets = async () => {
+    // Si no hay un usuario con sesión activa, no intentamos buscar en la BD
+    if (!userId) {
+      setBaskets([]);
+      setIsLoading(false);
+      return;
+    }
+
     setIsLoading(true);
     try {
       const supabase = createClient();
-      const usuarioIdPrueba = "31c3b38e-6c7b-4876-bedf-a46fe1d654ef"; 
 
       const { data, error } = await supabase
         .from("canastas_favoritas")
         .select("*")
-        .eq("usuario_id", usuarioIdPrueba)
+        .eq("usuario_id", userId) // <--- ¡AHORA USA EL ID DINÁMICO REAL!
         .order("fecha_creacion", { ascending: false });
 
       if (error) throw error;

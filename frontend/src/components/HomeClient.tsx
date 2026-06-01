@@ -617,6 +617,7 @@ export default function HomeClient({ initialMarkets }: HomeClientProps) {
                 ) : (
                   <SavedBaskets 
                     markets={markets} 
+                    userId={sessionUser?.id} // <-- NUEVA PROP: Pasamos el ID real del usuario logueado
                     onModifyBasket={(basket) => {
                       setBasketToModify(basket);
                       setActiveAiTab("generar");

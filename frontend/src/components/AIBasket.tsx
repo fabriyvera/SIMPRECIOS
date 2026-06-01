@@ -178,21 +178,32 @@ export function AIBasket({ markets, initialData }: AIBasketProps) {
     setIsSaving(true);
     try {
       const supabase = createClient();
-      const usuarioIdPrueba = "31c3b38e-6c7b-4876-bedf-a46fe1d654ef"; 
 
-      const { data, error } = await supabase
+      // 1. Obtener el usuario autenticado en este momento
+      const { data: { user }, error: authError } = await supabase.auth.getUser();
+
+      // 2. Bloquear el guardado si nadie ha iniciado sesión
+      if (authError || !user) {
+        alert("Por favor, inicia sesión en el sistema para guardar tus canastas.");
+        return; // Detiene la ejecución aquí
+      }
+
+      // 3. Guardar la canasta usando el ID dinámico del usuario
+      const { error } = await supabase
         .from('canastas_favoritas')
         .insert([
           {
-            usuario_id: usuarioIdPrueba,
-            nombre_canasta: generatedBasket?.wasPruned ? `Canasta Supervivencia (${generatedBasket?.membersServed} pers.)` : `Canasta IA (${generatedBasket?.membersServed} pers.)`,
+            usuario_id: user.id, // <--- Aquí captura automáticamente el ID correcto
+            nombre_canasta: `Canasta IA (${generatedBasket?.membersServed} pers.)`,
+            cantidad_familiares: generatedBasket?.membersServed,
             presupuesto_semanal_bs: generatedBasket?.weeklyBudget,
             items: generatedBasket?.items
           }
         ]);
 
       if (error) throw error;
-      alert("¡Éxito! La canasta se guardó en tu base de datos Supabase.");
+
+      alert("¡Éxito! La canasta se guardó en tu perfil.");
     } catch (error) {
       console.error("Error al guardar en Supabase:", error);
       alert("Error al guardar. Revisa la consola de tu navegador.");
