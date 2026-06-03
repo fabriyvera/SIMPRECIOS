@@ -4,14 +4,31 @@ export const API = {
   TIMEOUT: 10000,
   RETRY_COUNT: 3,
   ENDPOINTS: {
-    CALIFICAR: '/interaccion/puestos/{puesto_id}/calificar',
-    DENUNCIAR: '/interaccion/puestos/{puesto_id}/denunciar',
-    VERIFICAR_PRECIO: '/interaccion/puestos/{puesto_id}/verificar-precio',
+    // Authentication
+    LOGIN: '/api/auth/login',
+    REGISTER: '/api/auth/register',
+    
+    // Stock & Markets
+    GET_MARKETS: '/api/stock/markets',
+    GET_VENDOR_PUESTOS: '/api/prices/vendor-puestos/{userId}',
+    UPDATE_PRICE: '/api/prices/update',
+    GET_PRICE: '/api/prices/{marketId}/{productId}',
+    DELETE_PRICE: '/api/prices/{marketId}/{productId}',
+    
+    // Interacción
+    CALIFICAR: '/api/interaccion/puestos/{puesto_id}/calificar',
+    DENUNCIAR: '/api/interaccion/puestos/{puesto_id}/denunciar',
+    VERIFICAR_PRECIO: '/api/interaccion/puestos/{puesto_id}/verificar-precio',
+    GET_CALIFICACIONES: '/interaccion/calificaciones',
+    
+    // Favoritos
     AGREGAR_FAVORITO: '/interaccion/favoritos/{puesto_id}',
     ELIMINAR_FAVORITO: '/interaccion/favoritos/{puesto_id}',
     LISTAR_FAVORITOS: '/interaccion/favoritos',
-    OBTENER_INTERACCIONES_PUESTO: '/interaccion/puestos/{puesto_id}/interacciones',
-    OBTENER_INTERACCIONES_USUARIO: '/interaccion/usuario/interacciones',
+    
+    // Usuario
+    OBTENER_INTERACCIONES_USUARIO: '/api/interaccion/usuario/interacciones',
+    OBTENER_INTERACCIONES_PUESTO: '/api/interaccion/puestos/{puesto_id}/interacciones',
   },
 };
 

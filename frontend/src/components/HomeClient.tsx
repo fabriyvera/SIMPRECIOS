@@ -30,27 +30,39 @@ import { VerifyView } from "@/components/VerifyView";
 import { ProfileView } from "@/components/ProfileView";
 import { ToastProvider } from "@/components/Toast";
 import { createClient } from "@/utils/supabase/client";
+import { marketsAPI } from "@/services/api/markets";
+import { pricesAPI } from "@/services/api/prices";
+import { interaccionAPI } from "@/services/api/interaccion-client";
 
 interface HomeClientProps {
   initialMarkets?: any[];
+  serverRole?: string;
 }
 
-export default function HomeClient({ initialMarkets }: HomeClientProps) {
+export default function HomeClient({ initialMarkets, serverRole }: HomeClientProps) {
   const supabase = createClient();
 
   const [sessionUser, setSessionUser] = useState<SessionUser | null>(null);
-  const [userRole, setUserRole] = useState<"Vendedora" | "Comprador">("Comprador");
+  const [userRole, setUserRole] = useState<"Vendedora" | "Comprador">(
+    "Comprador",
+  );
   const [initialLoadComplete, setInitialLoadComplete] = useState(false);
 
   const [currentView, setCurrentView] = useState<AppView>("home");
   const [isVendorMode, setIsVendorMode] = useState(false);
-  const [selectedVendorMarket, setSelectedVendorMarket] = useState<string | null>(null);
+  const [selectedVendorMarket, setSelectedVendorMarket] = useState<
+    string | null
+  >(null);
 
   const [markets, setMarkets] = useState<Market[]>(
-    initialMarkets && initialMarkets.length > 0 ? initialMarkets : INITIAL_MARKETS,
+    initialMarkets && initialMarkets.length > 0
+      ? initialMarkets
+      : INITIAL_MARKETS,
   );
   const [vendorMarkets, setVendorMarkets] = useState<Market[]>([]); // puestos del vendedor logueado
-  const [calificacionesPorPuesto, setCalificacionesPorPuesto] = useState<Record<string, number>>({});
+  const [calificacionesPorPuesto, setCalificacionesPorPuesto] = useState<
+    Record<string, number>
+  >({});
 
   const [searchTerm, setSearchTerm] = useState("");
   const [selectedCategory, setSelectedCategory] = useState("all");
@@ -60,23 +72,31 @@ export default function HomeClient({ initialMarkets }: HomeClientProps) {
   const [showOpenOnly, setShowOpenOnly] = useState(false);
   const [userLocation, setUserLocation] = useState<UserLocation | null>(null);
   const [favoriteMarketIds, setFavoriteMarketIds] = useState<string[]>([]);
-  const [activeAiTab, setActiveAiTab] = useState<"generar" | "guardadas">("generar");
+  const [activeAiTab, setActiveAiTab] = useState<"generar" | "guardadas">(
+    "generar",
+  );
   const [basketToModify, setBasketToModify] = useState<any>(null);
 
-  // Geolocalización 
+  // Geolocalización
   useEffect(() => {
     if (!("geolocation" in navigator)) return;
     navigator.geolocation.getCurrentPosition(
-      (pos) => setUserLocation({ lat: pos.coords.latitude, lng: pos.coords.longitude }),
+      (pos) =>
+        setUserLocation({
+          lat: pos.coords.latitude,
+          lng: pos.coords.longitude,
+        }),
       () => setUserLocation({ lat: -16.5, lng: -68.15 }),
       { enableHighAccuracy: false, timeout: 5000, maximumAge: 0 },
     );
   }, []);
 
-  // OBTENER USUARIO Y PERFIL 
+  // OBTENER USUARIO Y PERFIL
   useEffect(() => {
     const getAuthUser = async () => {
-      const { data: { session } } = await supabase.auth.getSession();
+      const {
+        data: { session },
+      } = await supabase.auth.getSession();
       if (session?.user) {
         const userId = session.user.id;
         const { data: profile, error } = await supabase
@@ -98,11 +118,8 @@ export default function HomeClient({ initialMarkets }: HomeClientProps) {
 
           if (profile.rol === "Vendedora") {
             try {
-              const res = await fetch(`http://localhost:8000/api/prices/vendor-puestos/${userId}`);
-              if (res.ok) {
-                const puestos = await res.json();
-                setVendorMarkets(puestos);
-              }
+              const puestos = await pricesAPI.getVendorPuestos(userId);
+              setVendorMarkets(puestos);
             } catch (err) {
               console.error("Error cargando puestos del vendedor:", err);
             }
@@ -117,7 +134,9 @@ export default function HomeClient({ initialMarkets }: HomeClientProps) {
             .from("profiles")
             .insert({
               id: userId,
-              nombre_completo: session.user.user_metadata?.nombre_completo || session.user.email,
+              nombre_completo:
+                session.user.user_metadata?.nombre_completo ||
+                session.user.email,
               rol: "Comprador",
             })
             .select()
@@ -146,7 +165,9 @@ export default function HomeClient({ initialMarkets }: HomeClientProps) {
 
     getAuthUser();
 
-    const { data: { subscription } } = supabase.auth.onAuthStateChange((event, session) => {
+    const {
+      data: { subscription },
+    } = supabase.auth.onAuthStateChange((event, session) => {
       if (event === "SIGNED_IN" || event === "TOKEN_REFRESHED") {
         getAuthUser();
       } else if (event === "SIGNED_OUT") {
@@ -161,25 +182,29 @@ export default function HomeClient({ initialMarkets }: HomeClientProps) {
     return () => subscription.unsubscribe();
   }, []);
 
-  // Sincronizar del stock de los mercados 
+  // Sincronizar del stock de los mercados
   useEffect(() => {
     const syncWithDatabase = async () => {
       try {
-        const response = await fetch("http://localhost:8000/api/stock/markets");
-        if (!response.ok) throw new Error("Error al consultar el backend");
-        const dbData = await response.json();
+        const dbData = await marketsAPI.getMarkets();
         if (!dbData || dbData.length === 0) return;
 
         const mappedMarkets = dbData.map((dbMarket: any, index: number) => {
-          const productosReales = (dbMarket.stock_vendedora || []).map((stock: any) => {
-            const prodMaestro = stock.productos_mercado || {};
-            return {
-              id: prodMaestro.id ? prodMaestro.id.toString() : stock.id.toString(),
-              name: prodMaestro.nombre_producto ? prodMaestro.nombre_producto.trim() : "Producto",
-              price: stock.precio_actual,
-              available: stock.disponible,
-            };
-          });
+          const productosReales = (dbMarket.stock_vendedora || []).map(
+            (stock: any) => {
+              const prodMaestro = stock.productos_mercado || {};
+              return {
+                id: prodMaestro.id
+                  ? prodMaestro.id.toString()
+                  : stock.id.toString(),
+                name: prodMaestro.nombre_producto
+                  ? prodMaestro.nombre_producto.trim()
+                  : "Producto",
+                price: stock.precio_actual,
+                available: stock.disponible,
+              };
+            },
+          );
 
           const esCarne = dbMarket.sector?.toLowerCase().includes("carne");
           const color = esCarne ? "#ef4444" : "#0a6e34";
@@ -194,15 +219,21 @@ export default function HomeClient({ initialMarkets }: HomeClientProps) {
             id: dbMarket.id.toString(),
             vendorId: dbMarket.vendorId,
             name: dbMarket.nombre_puesto || "Puesto de Venta",
-            description: esCarne ? "Carnes frescas de primera calidad" : "Frutas y verduras frescas del productor",
+            description: esCarne
+              ? "Carnes frescas de primera calidad"
+              : "Frutas y verduras frescas del productor",
             category: dbMarket.sector || (esCarne ? "Carnes" : "Verduras"),
             marketLocation,
-            isOpen: dbMarket.esta_abierto !== undefined ? dbMarket.esta_abierto : true,
+            isOpen:
+              dbMarket.esta_abierto !== undefined
+                ? dbMarket.esta_abierto
+                : true,
             image,
             imageUrl: image,
             color,
             products: productosReales,
-            rating: dbMarket.calificacion_promedio || 4.5 + ((index * 0.1) % 0.5),
+            rating:
+              dbMarket.calificacion_promedio || 4.5 + ((index * 0.1) % 0.5),
             reviews: [],
           };
         });
@@ -210,12 +241,13 @@ export default function HomeClient({ initialMarkets }: HomeClientProps) {
         setMarkets(mappedMarkets);
 
         if (sessionUser?.rol === "Vendedora") {
-          const res = await fetch(`http://localhost:8000/api/prices/vendor-puestos/${sessionUser.id}`);
-          if (res.ok) {
-            const puestos = await res.json();
+          try {
+            const puestos = await pricesAPI.getVendorPuestos(sessionUser.id);
             setVendorMarkets(puestos);
-          } else {
-            const misPuestos = mappedMarkets.filter((m: any) => m.vendorId === sessionUser.id);
+          } catch (err) {
+            const misPuestos = mappedMarkets.filter(
+              (m: any) => m.vendorId === sessionUser.id,
+            );
             if (misPuestos.length) setVendorMarkets(misPuestos);
           }
         }
@@ -227,34 +259,40 @@ export default function HomeClient({ initialMarkets }: HomeClientProps) {
     syncWithDatabase();
   }, [sessionUser?.id]);
 
-// Cargar favoritos y calificaciones del usuario
+  // Cargar favoritos y calificaciones del usuario
   useEffect(() => {
     const loadUserData = async () => {
       if (!sessionUser?.id) return;
       try {
         // Obtener el token JWT de la sesión activa
-        const { data: { session } } = await supabase.auth.getSession();
+        const {
+          data: { session },
+        } = await supabase.auth.getSession();
         const token = session?.access_token;
         if (!token) return;
 
-        const headers = { "Authorization": `Bearer ${token}` };
+        const headers = { Authorization: `Bearer ${token}` };
 
         // Calificaciones
-        const calRes = await fetch(`http://localhost:8000/interaccion/calificaciones`, { headers });
-        if (calRes.ok) {
-          const calData = await calRes.json();
+        try {
+          const calData = await interaccionAPI.getCalificaciones(headers);
           const map: Record<string, number> = {};
-          calData.calificaciones?.forEach((c: any) => { map[c.puesto_id] = c.estrellas; });
+          calData.calificaciones?.forEach((c: any) => {
+            map[c.puesto_id] = c.estrellas;
+          });
           setCalificacionesPorPuesto(map);
+        } catch (err) {
+          console.error("Error cargando calificaciones:", err);
         }
 
         // Favoritos
-        const favRes = await fetch(`http://localhost:8000/interaccion/favoritos`, { headers });
-        if (favRes.ok) {
-          const favData = await favRes.json();
+        try {
+          const favData = await interaccionAPI.listarFavoritos(headers);
           const ids = favData.favoritos?.map((f: any) => f.puesto_id) || [];
           setFavoriteMarketIds(ids);
           localStorage.setItem("favoriteMarkets", JSON.stringify(ids));
+        } catch (err) {
+          console.error("Error cargando favoritos:", err);
         }
       } catch (error) {
         console.error("Error cargando datos del usuario:", error);
@@ -262,19 +300,23 @@ export default function HomeClient({ initialMarkets }: HomeClientProps) {
     };
     loadUserData();
   }, [sessionUser?.id]);
-  
+
   const recargarCalificaciones = async () => {
-    const { data: { session } } = await supabase.auth.getSession();
+    const {
+      data: { session },
+    } = await supabase.auth.getSession();
     const token = session?.access_token;
     if (!token) return;
-    const res = await fetch(`http://localhost:8000/interaccion/calificaciones`, {
-      headers: { "Authorization": `Bearer ${token}` }
-    });
-    if (res.ok) {
-      const data = await res.json();
+    try {
+      const headers = { Authorization: `Bearer ${token}` };
+      const data = await interaccionAPI.getCalificaciones(headers);
       const map: Record<string, number> = {};
-      data.calificaciones?.forEach((c: any) => { map[c.puesto_id] = c.estrellas; });
+      data.calificaciones?.forEach((c: any) => {
+        map[c.puesto_id] = c.estrellas;
+      });
       setCalificacionesPorPuesto(map);
+    } catch (err) {
+      console.error("Error recargando calificaciones:", err);
     }
   };
 
@@ -288,62 +330,102 @@ export default function HomeClient({ initialMarkets }: HomeClientProps) {
     setCurrentView(view);
   };
 
-  const handleUpdatePrice = (marketId: string, productId: string, newPrice: number) => {
-    const updateFn = (list: Market[]) => list.map(m =>
-      m.id === marketId ? { ...m, products: m.products.map(p => p.id === productId ? { ...p, price: newPrice } : p) } : m
-    );
+  const handleUpdatePrice = (
+    marketId: string,
+    productId: string,
+    newPrice: number,
+  ) => {
+    const updateFn = (list: Market[]) =>
+      list.map((m) =>
+        m.id === marketId
+          ? {
+              ...m,
+              products: m.products.map((p) =>
+                p.id === productId ? { ...p, price: newPrice } : p,
+              ),
+            }
+          : m,
+      );
     setMarkets(updateFn);
     setVendorMarkets(updateFn);
   };
 
   const handleToggleStock = (marketId: string, productId: string) => {
-    const toggleFn = (list: Market[]) => list.map(m =>
-      m.id === marketId ? { ...m, products: m.products.map(p => p.id === productId ? { ...p, available: !p.available } : p) } : m
-    );
+    const toggleFn = (list: Market[]) =>
+      list.map((m) =>
+        m.id === marketId
+          ? {
+              ...m,
+              products: m.products.map((p) =>
+                p.id === productId ? { ...p, available: !p.available } : p,
+              ),
+            }
+          : m,
+      );
     setMarkets(toggleFn);
     setVendorMarkets(toggleFn);
   };
 
-  const handleAddReview = (marketId: string, rating: number, comment: string) => {
-    setMarkets(prev => prev.map(m => {
-      if (m.id !== marketId) return m;
-      const newReview = {
-        id: `r${Date.now()}`,
-        userName: sessionUser?.user_metadata?.full_name || "Usuario",
-        rating,
-        comment,
-        date: new Date().toLocaleDateString("es-ES", { day: "numeric", month: "short", year: "numeric" }),
-      };
-      const updatedReviews = [...m.reviews, newReview];
-      const newRating = updatedReviews.reduce((acc, r) => acc + r.rating, 0) / updatedReviews.length;
-      return { ...m, reviews: updatedReviews, rating: Number(newRating.toFixed(1)) };
-    }));
+  const handleAddReview = (
+    marketId: string,
+    rating: number,
+    comment: string,
+  ) => {
+    setMarkets((prev) =>
+      prev.map((m) => {
+        if (m.id !== marketId) return m;
+        const newReview = {
+          id: `r${Date.now()}`,
+          userName: sessionUser?.user_metadata?.full_name || "Usuario",
+          rating,
+          comment,
+          date: new Date().toLocaleDateString("es-ES", {
+            day: "numeric",
+            month: "short",
+            year: "numeric",
+          }),
+        };
+        const updatedReviews = [...m.reviews, newReview];
+        const newRating =
+          updatedReviews.reduce((acc, r) => acc + r.rating, 0) /
+          updatedReviews.length;
+        return {
+          ...m,
+          reviews: updatedReviews,
+          rating: Number(newRating.toFixed(1)),
+        };
+      }),
+    );
   };
 
   const handleToggleFavorite = async (marketId: string) => {
     const isFavorite = favoriteMarketIds.includes(marketId);
     let newFavs: string[];
-    const { data: { session } } = await supabase.auth.getSession();
+    const {
+      data: { session },
+    } = await supabase.auth.getSession();
     const token = session?.access_token;
     const headers: Record<string, string> = token
-      ? { "Authorization": `Bearer ${token}` }
+      ? { Authorization: `Bearer ${token}` }
       : {};
 
     if (isFavorite) {
-      newFavs = favoriteMarketIds.filter(id => id !== marketId);
+      newFavs = favoriteMarketIds.filter((id) => id !== marketId);
       if (sessionUser?.id && token) {
-        await fetch(`http://localhost:8000/interaccion/favoritos/${marketId}`, {
-          method: "DELETE",
-          headers,
-        });
+        try {
+          await interaccionAPI.eliminarFavorito(marketId, headers);
+        } catch (err) {
+          console.error("Error eliminando favorito:", err);
+        }
       }
     } else {
       newFavs = [...favoriteMarketIds, marketId];
       if (sessionUser?.id && token) {
-        await fetch(`http://localhost:8000/interaccion/favoritos/${marketId}`, {
-          method: "POST",
-          headers,
-        });
+        try {
+          await interaccionAPI.agregarFavorito(marketId, headers);
+        } catch (err) {
+          console.error("Error agregando favorito:", err);
+        }
       }
     }
     setFavoriteMarketIds(newFavs);
@@ -357,10 +439,12 @@ export default function HomeClient({ initialMarkets }: HomeClientProps) {
   // ── Memorización de datos calculados ──
   const averagePrices = useMemo(() => {
     const priceMap: Record<string, number[]> = {};
-    markets.forEach(m => m.products.forEach(p => {
-      if (!priceMap[p.name]) priceMap[p.name] = [];
-      priceMap[p.name].push(p.price);
-    }));
+    markets.forEach((m) =>
+      m.products.forEach((p) => {
+        if (!priceMap[p.name]) priceMap[p.name] = [];
+        priceMap[p.name].push(p.price);
+      }),
+    );
     const averages: Record<string, number> = {};
     Object.entries(priceMap).forEach(([name, prices]) => {
       averages[name] = prices.reduce((a, b) => a + b, 0) / prices.length;
@@ -370,41 +454,72 @@ export default function HomeClient({ initialMarkets }: HomeClientProps) {
 
   const priceHistory = useMemo(() => {
     const history: Record<string, PriceHistory[]> = {};
-    markets.forEach(m => m.products.forEach(p => {
-      if (!history[p.name]) history[p.name] = generatePriceHistory(p.price);
-    }));
+    markets.forEach((m) =>
+      m.products.forEach((p) => {
+        if (!history[p.name]) history[p.name] = generatePriceHistory(p.price);
+      }),
+    );
     return history;
   }, [markets]);
 
-  const categories = useMemo(() => [...new Set(markets.map(m => m.category || "General"))].sort(), [markets]);
-  const marketLocations = useMemo(() => [...new Set(markets.map(m => m.marketLocation || "Mercado Central"))].sort(), [markets]);
+  const categories = useMemo(
+    () => [...new Set(markets.map((m) => m.category || "General"))].sort(),
+    [markets],
+  );
+  const marketLocations = useMemo(
+    () =>
+      [
+        ...new Set(markets.map((m) => m.marketLocation || "Mercado Central")),
+      ].sort(),
+    [markets],
+  );
 
   const finalMarkets = useMemo(() => {
-    let filtered = markets.filter(m => {
-      const matchesSearch = m.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
-                            m.description.toLowerCase().includes(searchTerm.toLowerCase());
-      const matchesCat = selectedCategory === "all" || m.category === selectedCategory;
-      const matchesLoc = selectedMarketLocation === "all" || m.marketLocation === selectedMarketLocation;
+    let filtered = markets.filter((m) => {
+      const matchesSearch =
+        m.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
+        m.description.toLowerCase().includes(searchTerm.toLowerCase());
+      const matchesCat =
+        selectedCategory === "all" || m.category === selectedCategory;
+      const matchesLoc =
+        selectedMarketLocation === "all" ||
+        m.marketLocation === selectedMarketLocation;
       const matchesOpen = !showOpenOnly || m.isOpen;
       const matchesFav = !showFavoritesOnly || favoriteMarketIds.includes(m.id);
-      return matchesSearch && matchesCat && matchesLoc && matchesOpen && matchesFav;
+      return (
+        matchesSearch && matchesCat && matchesLoc && matchesOpen && matchesFav
+      );
     });
     filtered.sort((a, b) => {
       switch (sortBy) {
-        case "name": return a.name.localeCompare(b.name);
-        case "name-desc": return b.name.localeCompare(a.name);
-        case "rating": return a.rating - b.rating;
-        case "rating-desc": return b.rating - a.rating;
-        default: return 0;
+        case "name":
+          return a.name.localeCompare(b.name);
+        case "name-desc":
+          return b.name.localeCompare(a.name);
+        case "rating":
+          return a.rating - b.rating;
+        case "rating-desc":
+          return b.rating - a.rating;
+        default:
+          return 0;
       }
     });
     return filtered;
-  }, [markets, searchTerm, selectedCategory, selectedMarketLocation, showOpenOnly, showFavoritesOnly, favoriteMarketIds, sortBy]);
+  }, [
+    markets,
+    searchTerm,
+    selectedCategory,
+    selectedMarketLocation,
+    showOpenOnly,
+    showFavoritesOnly,
+    favoriteMarketIds,
+    sortBy,
+  ]);
 
   const vendorFilteredMarkets = useMemo(() => {
     if (vendorMarkets.length) return vendorMarkets;
     if (sessionUser?.id && markets.length) {
-      return markets.filter(m => m.vendorId === sessionUser.id);
+      return markets.filter((m) => m.vendorId === sessionUser.id);
     }
     return [];
   }, [vendorMarkets, markets, sessionUser?.id]);
@@ -414,27 +529,40 @@ export default function HomeClient({ initialMarkets }: HomeClientProps) {
     return (
       <div className="min-h-screen bg-gray-50 flex flex-col items-center justify-center p-4">
         <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-purple-600 mx-auto"></div>
-        <p className="text-sm font-semibold text-gray-500 animate-pulse mt-4">Iniciando entorno seguro...</p>
+        <p className="text-sm font-semibold text-gray-500 animate-pulse mt-4">
+          Iniciando entorno seguro...
+        </p>
       </div>
     );
   }
 
   // Vistas de autenticación
-  if (currentView === "login") return <LoginView onViewChange={handleViewChange} />;
-  if (currentView === "registro") return <RegisterView onViewChange={handleViewChange} />;
-  if (currentView === "recuperar") return <RecoverView onViewChange={handleViewChange} />;
-  if (currentView === "verificar") return <VerifyView onViewChange={handleViewChange} />;
-  if (currentView === "perfil") return <ProfileView onViewChange={handleViewChange} />;
+  if (currentView === "login")
+    return <LoginView onViewChange={handleViewChange} />;
+  if (currentView === "registro")
+    return <RegisterView onViewChange={handleViewChange} />;
+  if (currentView === "recuperar")
+    return <RecoverView onViewChange={handleViewChange} />;
+  if (currentView === "verificar")
+    return <VerifyView onViewChange={handleViewChange} />;
+  if (currentView === "perfil")
+    return <ProfileView onViewChange={handleViewChange} />;
 
   // Panel de vendedor (detalle de un puesto)
   if (isVendorMode && selectedVendorMarket) {
-    const market = vendorFilteredMarkets.find(m => m.id === selectedVendorMarket);
+    const market = vendorFilteredMarkets.find(
+      (m) => m.id === selectedVendorMarket,
+    );
     if (market) {
       return (
         <div className="min-h-screen bg-background">
           <div className="bg-gradient-to-r from-purple-600 to-blue-600 text-white py-6 px-4 shadow-lg">
             <div className="container mx-auto">
-              <Button variant="ghost" className="text-white hover:bg-white/20 mb-4" onClick={() => setSelectedVendorMarket(null)}>
+              <Button
+                variant="ghost"
+                className="text-white hover:bg-white/20 mb-4"
+                onClick={() => setSelectedVendorMarket(null)}
+              >
                 <ArrowLeft className="w-4 h-4 mr-2" /> Volver a Mis Puestos
               </Button>
             </div>
@@ -442,48 +570,115 @@ export default function HomeClient({ initialMarkets }: HomeClientProps) {
           <div className="container mx-auto px-4 py-8">
             <VendorDashboard
               market={market}
-              onUpdatePrice={(productId, newPrice) => handleUpdatePrice(market.id, productId, newPrice)}
-              onMarkRestocked={(productId) => handleToggleStock(market.id, productId)}
+              onUpdatePrice={(productId, newPrice) =>
+                handleUpdatePrice(market.id, productId, newPrice)
+              }
+              onMarkRestocked={(productId) =>
+                handleToggleStock(market.id, productId)
+              }
               onDeleteProduct={(productId) => {
-                setMarkets(prev => prev.map(m => m.id === market.id ? { ...m, products: m.products.filter(p => p.id !== productId) } : m));
-                setVendorMarkets(prev => prev.map(m => m.id === market.id ? { ...m, products: m.products.filter(p => p.id !== productId) } : m));
+                setMarkets((prev) =>
+                  prev.map((m) =>
+                    m.id === market.id
+                      ? {
+                          ...m,
+                          products: m.products.filter(
+                            (p) => p.id !== productId,
+                          ),
+                        }
+                      : m,
+                  ),
+                );
+                setVendorMarkets((prev) =>
+                  prev.map((m) =>
+                    m.id === market.id
+                      ? {
+                          ...m,
+                          products: m.products.filter(
+                            (p) => p.id !== productId,
+                          ),
+                        }
+                      : m,
+                  ),
+                );
               }}
               onRegisterProduct={async (name, price) => {
                 if (!name.trim() || !price) return;
-                const nombreFormateado = name.trim().charAt(0).toUpperCase() + name.trim().slice(1).toLowerCase();
+                const nombreFormateado =
+                  name.trim().charAt(0).toUpperCase() +
+                  name.trim().slice(1).toLowerCase();
                 const precioNumerico = parseFloat(price.toString());
                 try {
-                  const res = await fetch("http://localhost:8000/api/prices/update", {
-                    method: "PUT",
-                    headers: { "Content-Type": "application/json" },
-                    body: JSON.stringify({
-                      puesto_id: parseInt(market.id, 10),
-                      producto_id: 0,
-                      nombre_producto: nombreFormateado,
-                      precio_actual: precioNumerico,
-                    }),
+                  const data = await pricesAPI.updatePrice({
+                    puesto_id: parseInt(market.id, 10),
+                    producto_id: 0,
+                    nombre_producto: nombreFormateado,
+                    precio_actual: precioNumerico,
                   });
-                  if (!res.ok) throw new Error("Error en backend");
-                  const data = await res.json();
-                  const newId = data.producto_id ? data.producto_id.toString() : `p-${Date.now()}`;
-                  const addProd = (list: Market[]) => list.map(m => m.id === market.id ? {
-                    ...m,
-                    products: [...m.products, { id: newId, name: nombreFormateado, price: precioNumerico, available: true }]
-                  } : m);
+                  const newId = data.producto_id
+                    ? data.producto_id.toString()
+                    : `p-${Date.now()}`;
+                  const addProd = (list: Market[]) =>
+                    list.map((m) =>
+                      m.id === market.id
+                        ? {
+                            ...m,
+                            products: [
+                              ...m.products,
+                              {
+                                id: newId,
+                                name: nombreFormateado,
+                                price: precioNumerico,
+                                available: true,
+                              },
+                            ],
+                          }
+                        : m,
+                    );
                   setMarkets(addProd);
                   setVendorMarkets(addProd);
                 } catch (e) {
                   console.error("Error registrando producto:", e);
                 }
               }}
-              onToggleStock={(productId) => handleToggleStock(market.id, productId)}
+              onToggleStock={(productId) =>
+                handleToggleStock(market.id, productId)
+              }
               onNotifyStock={(productId) => {
-                setMarkets(prev => prev.map(m => m.id === market.id ? { ...m, products: m.products.map(p => p.id === productId ? { ...p, available: false } : p) } : m));
-                setVendorMarkets(prev => prev.map(m => m.id === market.id ? { ...m, products: m.products.map(p => p.id === productId ? { ...p, available: false } : p) } : m));
+                setMarkets((prev) =>
+                  prev.map((m) =>
+                    m.id === market.id
+                      ? {
+                          ...m,
+                          products: m.products.map((p) =>
+                            p.id === productId ? { ...p, available: false } : p,
+                          ),
+                        }
+                      : m,
+                  ),
+                );
+                setVendorMarkets((prev) =>
+                  prev.map((m) =>
+                    m.id === market.id
+                      ? {
+                          ...m,
+                          products: m.products.map((p) =>
+                            p.id === productId ? { ...p, available: false } : p,
+                          ),
+                        }
+                      : m,
+                  ),
+                );
               }}
               priceHistory={priceHistory}
               averagePrices={averagePrices}
-              referencePrices={market.products.reduce((acc, p) => ({ ...acc, [p.name.trim()]: (p as any).refPrice || p.price }), {})}
+              referencePrices={market.products.reduce(
+                (acc, p) => ({
+                  ...acc,
+                  [p.name.trim()]: (p as any).refPrice || p.price,
+                }),
+                {},
+              )}
             />
           </div>
         </div>
@@ -495,25 +690,53 @@ export default function HomeClient({ initialMarkets }: HomeClientProps) {
   if (isVendorMode) {
     return (
       <div className="min-h-screen bg-background pb-20">
-        <Navbar currentView={currentView} onViewChange={handleViewChange} sessionUser={sessionUser} />
+        <Navbar
+          currentView={currentView}
+          onViewChange={handleViewChange}
+          sessionUser={sessionUser}
+        />
         <div className="container mx-auto px-4 py-8">
           <div className="mb-6">
             <h2 className="text-2xl font-bold mb-1">Mis Puestos</h2>
-            <p className="text-sm text-gray-600">Selecciona un puesto para gestionar precios, productos y stock.</p>
+            <p className="text-sm text-gray-600">
+              Selecciona un puesto para gestionar precios, productos y stock.
+            </p>
           </div>
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-            {vendorFilteredMarkets.map(market => (
-              <div key={market.id} className="bg-white rounded-xl shadow-lg overflow-hidden cursor-pointer hover:shadow-xl transition-shadow border-l-4" style={{ borderLeftColor: market.color }} onClick={() => setSelectedVendorMarket(market.id)}>
-                <div className="h-48 overflow-hidden"><img src={market.image} alt={market.name} className="w-full h-full object-cover" /></div>
+            {vendorFilteredMarkets.map((market) => (
+              <div
+                key={market.id}
+                className="bg-white rounded-xl shadow-lg overflow-hidden cursor-pointer hover:shadow-xl transition-shadow border-l-4"
+                style={{ borderLeftColor: market.color }}
+                onClick={() => setSelectedVendorMarket(market.id)}
+              >
+                <div className="h-48 overflow-hidden">
+                  <img
+                    src={market.image}
+                    alt={market.name}
+                    className="w-full h-full object-cover"
+                  />
+                </div>
                 <div className="p-6">
                   <div className="flex items-center justify-between mb-2">
                     <h3 className="font-bold text-xl">{market.name}</h3>
-                    <span className="px-3 py-1 rounded-full text-sm font-bold text-white" style={{ backgroundColor: market.color }}>{market.category}</span>
+                    <span
+                      className="px-3 py-1 rounded-full text-sm font-bold text-white"
+                      style={{ backgroundColor: market.color }}
+                    >
+                      {market.category}
+                    </span>
                   </div>
-                  <p className="text-sm text-gray-600 mb-4">{market.description}</p>
+                  <p className="text-sm text-gray-600 mb-4">
+                    {market.description}
+                  </p>
                   <div className="flex items-center justify-between text-sm">
-                    <span className="text-gray-500">{market.products.length} productos</span>
-                    <span className="font-bold" style={{ color: market.color }}>Ver Panel →</span>
+                    <span className="text-gray-500">
+                      {market.products.length} productos
+                    </span>
+                    <span className="font-bold" style={{ color: market.color }}>
+                      Ver Panel →
+                    </span>
                   </div>
                 </div>
               </div>
@@ -533,7 +756,11 @@ export default function HomeClient({ initialMarkets }: HomeClientProps) {
   return (
     <ToastProvider>
       <div className="min-h-screen bg-background pb-20">
-        <Navbar currentView={currentView} onViewChange={handleViewChange} sessionUser={sessionUser} />
+        <Navbar
+          currentView={currentView}
+          onViewChange={handleViewChange}
+          sessionUser={sessionUser}
+        />
         <div className="container mx-auto px-4 py-6">
           {currentView === "home" && (
             <>
@@ -556,8 +783,16 @@ export default function HomeClient({ initialMarkets }: HomeClientProps) {
               <div className="mb-4 bg-white rounded-xl p-3 shadow-sm border-l-4 border-orange-500">
                 <p className="text-sm font-bold text-gray-700">
                   {finalMarkets.length} de {markets.length} puestos
-                  {selectedMarketLocation !== "all" && <span className="ml-2 text-orange-600">en {selectedMarketLocation}</span>}
-                  {showFavoritesOnly && <span className="ml-2 text-orange-600">(solo favoritos)</span>}
+                  {selectedMarketLocation !== "all" && (
+                    <span className="ml-2 text-orange-600">
+                      en {selectedMarketLocation}
+                    </span>
+                  )}
+                  {showFavoritesOnly && (
+                    <span className="ml-2 text-orange-600">
+                      (solo favoritos)
+                    </span>
+                  )}
                 </p>
               </div>
               <MarketGrid
@@ -580,7 +815,9 @@ export default function HomeClient({ initialMarkets }: HomeClientProps) {
             </>
           )}
 
-          {currentView === "map" && <MapView markets={finalMarkets} userLocation={userLocation} />}
+          {currentView === "map" && (
+            <MapView markets={finalMarkets} userLocation={userLocation} />
+          )}
           {currentView === "ai" && (
             <div className="max-w-2xl mx-auto w-full flex flex-col gap-4">
               <div className="bg-slate-100/80 backdrop-blur-sm p-1.5 rounded-2xl flex mx-4 border border-slate-200/60 shadow-sm mt-2">
@@ -610,21 +847,17 @@ export default function HomeClient({ initialMarkets }: HomeClientProps) {
 
               <div className="animate-in fade-in zoom-in-95 duration-300">
                 {activeAiTab === "generar" ? (
-                  <AIBasket 
-                    markets={markets} 
-                    initialData={basketToModify} 
-                  />
+                  <AIBasket markets={markets} initialData={basketToModify} />
                 ) : (
-                  <SavedBaskets 
-                    markets={markets} 
+                  <SavedBaskets
+                    markets={markets}
                     onModifyBasket={(basket) => {
                       setBasketToModify(basket);
                       setActiveAiTab("generar");
-                    }} 
+                    }}
                   />
                 )}
               </div>
-              
             </div>
           )}
         </div>

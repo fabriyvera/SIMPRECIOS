@@ -21,7 +21,7 @@ app.add_middleware(
 app.include_router(auth.router)
 app.include_router(prices.router, prefix="/api/prices", tags=["Precios"])
 app.include_router(stock.router, prefix="/api/stock", tags=["Inventario"])
-app.include_router(interaccion.router)   
+app.include_router(interaccion.router, prefix="/api")   
 
 
 @app.get("/", tags=["Health"])

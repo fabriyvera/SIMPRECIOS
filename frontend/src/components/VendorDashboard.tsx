@@ -11,6 +11,7 @@ import { OverpricingAlertModal } from "./OverpricingAlertModal";
 import { RegisterProductModal } from "./RegisterProductModal";
 import { StockManagement } from "./StockManagement";
 import { toast } from "sonner";
+import { pricesAPI } from "@/services/api/prices";
 
 interface VendorDashboardProps {
   market: Market;
@@ -71,20 +72,7 @@ export function VendorDashboard({
           nombre_producto: productName 
         };
 
-        const response = await fetch("http://localhost:8000/api/prices/update", {
-          method: "PUT",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify(bodyPayload),
-        });
-
-        if (!response.ok) {
-          const errorData = await response.json().catch(() => ({}));
-          const mensajeError = typeof errorData.detail === 'object' 
-            ? JSON.stringify(errorData.detail) 
-            : errorData.detail;
-            
-          throw new Error(mensajeError || "Error de validación en FastAPI");
-        }
+        await pricesAPI.updatePrice(bodyPayload);
 
         onUpdatePrice(productId, price);
         setLocalProducts(prev => 
@@ -119,14 +107,7 @@ export function VendorDashboard({
       }
 
       
-      const response = await fetch(`http://localhost:8000/api/prices/${market.id}/${productoIdFinal}`, {
-        method: "DELETE",
-        headers: { "Content-Type": "application/json" }
-      });
-
-      if (!response.ok) {
-        throw new Error("No se pudo eliminar el producto del servidor");
-      }
+      const response = await pricesAPI.deletePrice(market.id, String(productoIdFinal));
 
       // Descontar del estado local inmediatamente
       setLocalProducts(prev => prev.filter(p => p.id !== productId));

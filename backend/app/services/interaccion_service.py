@@ -1,13 +1,4 @@
-"""
-Servicio — Sprint 4: Interacción con los Puestos (con autenticación por JWT local)
-Toda la lógica de negocio separada del router.
-HU-14: Calificar la atención
-HU-15: Verificar transparencia
-HU-16: Denunciar sobreprecio
-HU-17: Agendar favoritos
-"""
-
-from typing import Any, Dict, List, cast
+from typing import Any, Dict, List, Optional, cast
 from supabase import Client
 from fastapi import HTTPException
 from app.models.interaccion import (
@@ -18,15 +9,10 @@ from app.models.interaccion import (
     ListaFavoritosResponse, FavoritoResponse,
     ListaCalificacionesResponse, CalificacionUsuarioResponse,
     ListaInteraccionesResponse, InteraccionResponse,
+    ListaInteraccionesPuestoResponse,
 )
 
-# Umbral de sobreprecio definido en RN-02 del documento
 UMBRAL_SOBREPRECIO = 0.10  # 10%
-
-
-# ─────────────────────────────────────────────
-# HU-14 │ Calificar la atención
-# ─────────────────────────────────────────────
 
 async def calificar_puesto(
     puesto_id: str,
@@ -391,38 +377,105 @@ async def obtener_calificaciones_usuario(
     return ListaCalificacionesResponse(total=len(calificaciones), calificaciones=calificaciones)
 
 
-# ─────────────────────────────────────────────
-# Interacciones — Vista unificada
-# ─────────────────────────────────────────────
-
 async def obtener_interacciones_puesto(
-    puesto_id: str,
+    puesto_id: int,
     supabase: Client,
-) -> ListaInteraccionesResponse:
-    interacciones_raw = (
-        supabase.table("vista_interacciones")
-        .select("*")
-        .eq("puesto_id", int(puesto_id))
+    limite: int = 50,
+    offset: int = 0,
+    tipo_filtro: Optional[str] = None,
+) -> ListaInteraccionesPuestoResponse:
+    """
+    Obtiene todas las interacciones (calificaciones + denuncias) de un puesto
+    desde la vista unificada vista_interacciones.
+    
+    Args:
+        puesto_id: ID del puesto
+        supabase: Cliente de Supabase
+        limite: Número máximo de interacciones a retornar (1-100)
+        offset: Para paginación (default: 0)
+        tipo_filtro: Filtrar solo por tipo ('calificacion', 'denuncia', o None para todas)
+    
+    Returns:
+        ListaInteraccionesPuestoResponse con estadísticas e interacciones
+    
+    Raises:
+        HTTPException: Si el puesto no existe
+    """
+    # Validar límite
+    if limite < 1:
+        limite = 50
+    if limite > 100:
+        limite = 100
+    if offset < 0:
+        offset = 0
+    
+    # Verificar que el puesto existe
+    puesto = (
+        supabase.table("puestos_venta")
+        .select("id, calificacion_promedio")
+        .eq("id", puesto_id)
+        .maybe_single()
+        .execute()
+    )
+    if not puesto.data:
+        raise HTTPException(status_code=404, detail="Puesto no encontrado")
+    
+    promedio_estrellas = float(puesto.data.get("calificacion_promedio", 0.0)) if puesto.data else 0.0
+    
+    # Obtener todas las interacciones desde la vista
+    query = supabase.table("vista_interacciones").select(
+        "tipo, interaccion_id, puesto_id, usuario_id, puntuacion, texto, fecha, precio_detectado, estado"
+    ).eq("puesto_id", puesto_id)
+    
+    # Aplicar filtro de tipo si se proporciona
+    if tipo_filtro and tipo_filtro in ["calificacion", "denuncia"]:
+        query = query.eq("tipo", tipo_filtro)
+    
+    # Ordenar por fecha descendente
+    resultado = (
+        query
         .order("fecha", desc=True)
+        .range(offset, offset + limite - 1)
         .execute()
     )
     
-    interacciones = []
-    inter_list: List[Dict[str, Any]] = cast(List[Dict[str, Any]], interacciones_raw.data) if interacciones_raw.data else []
-    for inter in inter_list:
-        interacciones.append(InteraccionResponse(
-            tipo=inter.get("tipo", ""),
-            interaccion_id=int(inter.get("interaccion_id", 0)),
-            puesto_id=int(inter.get("puesto_id", 0)),
-            usuario_id=inter.get("usuario_id", ""),
-            puntuacion=inter.get("puntuacion"),
-            texto=inter.get("texto", ""),
-            fecha=inter.get("fecha"),
-            precio_detectado=inter.get("precio_detectado"),
-            estado=inter.get("estado"),
-        ))
+    interacciones_data: List[Dict[str, Any]] = cast(
+        List[Dict[str, Any]], resultado.data
+    ) if resultado.data else []
     
-    return ListaInteraccionesResponse(total=len(interacciones), interacciones=interacciones)
+    # Convertir a modelos Pydantic
+    interacciones = [
+        InteraccionResponse(
+            tipo=row.get("tipo", ""),
+            interaccion_id=int(row.get("interaccion_id", 0)),
+            puesto_id=int(row.get("puesto_id", 0)),
+            usuario_id=row.get("usuario_id"),
+            puntuacion=row.get("puntuacion"),
+            texto=row.get("texto"),
+            fecha=row.get("fecha"),
+            precio_detectado=row.get("precio_detectado"),
+            estado=row.get("estado"),
+        )
+        for row in interacciones_data
+    ]
+    
+    # Contar estadísticas
+    total_calificaciones = sum(1 for i in interacciones if i.tipo == "calificacion")
+    total_denuncias = sum(1 for i in interacciones if i.tipo == "denuncia")
+    denuncias_pendientes = sum(
+        1 for i in interacciones 
+        if i.tipo == "denuncia" and i.estado == "Pendiente"
+    )
+    
+    return ListaInteraccionesPuestoResponse(
+        puesto_id=puesto_id,
+        total_calificaciones=total_calificaciones,
+        promedio_estrellas=promedio_estrellas,
+        total_denuncias=total_denuncias,
+        denuncias_pendientes=denuncias_pendientes,
+        interacciones=interacciones,
+    )
+
 
 
 async def obtener_interacciones_usuario(

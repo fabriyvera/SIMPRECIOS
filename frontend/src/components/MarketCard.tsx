@@ -23,9 +23,32 @@ import { Avatar } from "./ui/avatar";
 import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer } from "recharts";
 import { PriceComparison } from "./PriceComparison";
 import { PriceValidator } from "./PriceValidator";
+import { CommentsSection } from "./CommentsSection";
 import { Market, PriceHistory } from "@/types";
 import { useCalificar, useDenunciar, useAgregarFavorito, useEliminarFavorito } from "@/hooks/useInteraccion";
 import { useToast } from "./Toast";
+import { API, buildUrl } from "@/config/api";
+
+interface Interaccion {
+  tipo: "calificacion" | "denuncia";
+  interaccion_id: number;
+  puesto_id: number;
+  usuario_id: string | null;
+  puntuacion: number | null;
+  texto: string | null;
+  fecha: string;
+  precio_detectado: number | null;
+  estado: string | null;
+}
+
+interface ListaInteraccionesPuestoResponse {
+  puesto_id: number;
+  total_calificaciones: number;
+  promedio_estrellas: number;
+  total_denuncias: number;
+  denuncias_pendientes: number;
+  interacciones: Interaccion[];
+}
 
 interface OverpriceReport {
   productName: string;
@@ -71,9 +94,15 @@ export function MarketCard({
   // Estados generales
   const [showProducts, setShowProducts] = useState(false);
   const [showReviews, setShowReviews] = useState(false);
+  const [showUnifiedComments, setShowUnifiedComments] = useState(false);
   const [newRating, setNewRating] = useState(0);
   const [newComment, setNewComment] = useState("");
   const [showAddReview, setShowAddReview] = useState(false);
+
+  // Interacciones y confiabilidad
+  const [interacciones, setInteracciones] = useState<ListaInteraccionesPuestoResponse | null>(null);
+  const [loadingInteracciones, setLoadingInteracciones] = useState(false);
+  const [confiabilidadReseñas, setConfiabilidadReseñas] = useState<number | null>(null);
 
   // Historial, comparación, validador
   const [selectedProductForHistory, setSelectedProductForHistory] = useState<string | null>(null);
@@ -86,6 +115,38 @@ export function MarketCard({
   useEffect(() => {
     setFavorite(isFavorite);
   }, [isFavorite]);
+
+  // Cargar interacciones del puesto
+  useEffect(() => {
+    const cargarInteracciones = async () => {
+      try {
+        setLoadingInteracciones(true);
+        const url = buildUrl(API.ENDPOINTS.OBTENER_INTERACCIONES_PUESTO, {
+          puesto_id: parseInt(market.id),
+        });
+        const response = await fetch(url);
+        if (response.ok) {
+          const data: ListaInteraccionesPuestoResponse = await response.json();
+          setInteracciones(data);
+          
+          // Calcular confiabilidad basada en buenas reseñas
+          if (data.total_calificaciones > 0) {
+            const buenasReseñas = data.interacciones.filter(
+              i => i.tipo === "calificacion" && i.puntuacion && i.puntuacion >= 4
+            ).length;
+            const porcentaje = (buenasReseñas / data.total_calificaciones) * 100;
+            setConfiabilidadReseñas(Math.round(porcentaje));
+          }
+        }
+      } catch (error) {
+        console.error("Error cargando interacciones:", error);
+      } finally {
+        setLoadingInteracciones(false);
+      }
+    };
+
+    cargarInteracciones();
+  }, [market.id]);
 
   // Verificar si el puesto ya fue calificado
   const yaFueCalificado = calificacionesPorPuesto && calificacionesPorPuesto[market.id] !== undefined;
@@ -243,10 +304,17 @@ export function MarketCard({
   };
 
   const handleVerifyTransparency = () => {
-    if (transparencyScore !== null) {
-      addToast(`Confiabilidad del puesto: ${transparencyScore}%`, 'info');
+    if (confiabilidadReseñas !== null) {
+      const mensaje = confiabilidadReseñas >= 70
+        ? `✅ Puesto confiable: ${confiabilidadReseñas}% de reseñas positivas (${interacciones?.total_calificaciones || 0} reseñas)`
+        : confiabilidadReseñas >= 40
+        ? `⚠️ Confiabilidad moderada: ${confiabilidadReseñas}% reseñas positivas (${interacciones?.total_calificaciones || 0} reseñas)`
+        : `❌ Baja confiabilidad: ${confiabilidadReseñas}% reseñas positivas (${interacciones?.total_calificaciones || 0} reseñas)`;
+      addToast(mensaje, confiabilidadReseñas >= 70 ? 'success' : confiabilidadReseñas >= 40 ? 'info' : 'error');
+    } else if (interacciones?.total_calificaciones === 0) {
+      addToast('Sin reseñas aún. ¡Sé el primero en calificar!', 'info');
     } else {
-      addToast('No hay suficientes productos para calcular la confiabilidad', 'info');
+      addToast('Cargando confiabilidad...', 'info');
     }
   };
 
@@ -313,21 +381,13 @@ export function MarketCard({
           <div className="flex flex-col items-end gap-1">
             <div className="flex items-center gap-1 bg-yellow-50 px-2 py-1 rounded-lg">
               <Star className="w-5 h-5 fill-yellow-400 text-yellow-400" />
-              <span className="font-bold text-lg">{(market.rating ?? 0).toFixed(1)}</span>
+              <span className="font-bold text-lg">
+                {interacciones ? (interacciones.promedio_estrellas ?? 0).toFixed(1) : (market.rating ?? 0).toFixed(1)}
+              </span>
             </div>
             <span className="text-xs text-muted-foreground">
-              ({market.reviews?.length || 0} reseñas)
+              ({interacciones ? interacciones.total_calificaciones : market.reviews?.length || 0} reseñas)
             </span>
-
-            {transparencyScore !== null && (
-              <div
-                className="flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-semibold text-white mt-1"
-                style={{ backgroundColor: transparencyColor }}
-              >
-                <ShieldCheck className="w-3 h-3" />
-                {transparencyScore}% confiable
-              </div>
-            )}
           </div>
         </div>
       </CardHeader>
@@ -570,62 +630,28 @@ export function MarketCard({
           </div>
         )}
 
-        {/* Reseñas */}
+        {/* Comentarios Unificados (Calificaciones + Denuncias) */}
         <div className="space-y-2">
           <Button
             variant="ghost"
             className="w-full flex items-center justify-between p-3 h-auto rounded-xl"
-            style={{ backgroundColor: showReviews ? `${market.color}15` : 'transparent' }}
-            onClick={() => setShowReviews(!showReviews)}
+            style={{ backgroundColor: showUnifiedComments ? `${market.color}15` : 'transparent' }}
+            onClick={() => setShowUnifiedComments(!showUnifiedComments)}
           >
             <div className="flex items-center gap-2">
               <MessageSquare className="w-4 h-4" style={{ color: market.color }} />
               <span className="text-sm font-bold" style={{ color: market.color }}>
-                Comentarios ({market.reviews?.length || 0})
+                Ver comentarios y denuncias
               </span>
             </div>
-            {showReviews ? <ChevronUp className="w-5 h-5" /> : <ChevronDown className="w-5 h-5" />}
+            {showUnifiedComments ? <ChevronUp className="w-5 h-5" /> : <ChevronDown className="w-5 h-5" />}
           </Button>
 
-          {showReviews && (
-            <div className="space-y-3 pt-1">
-              {market.reviews.map((review) => (
-                <div
-                  key={review.id}
-                  className="p-3 rounded-lg border-l-4 bg-gradient-to-r from-white to-gray-50 shadow-sm"
-                  style={{ borderLeftColor: market.color }}
-                >
-                  <div className="flex items-start justify-between mb-2">
-                    <div className="flex items-center gap-2">
-                      <Avatar className="w-9 h-9 border-2" style={{ borderColor: market.color }}>
-                        <div
-                          className="w-full h-full flex items-center justify-center text-white font-bold"
-                          style={{ backgroundColor: market.color }}
-                        >
-                          {review.userName.charAt(0).toUpperCase()}
-                        </div>
-                      </Avatar>
-                      <div>
-                        <p className="text-sm font-bold">{review.userName}</p>
-                        <p className="text-xs text-muted-foreground">
-                          {review.date || 'Reciente'}
-                        </p>
-                      </div>
-                    </div>
-                    <div className="flex items-center gap-1 bg-yellow-50 px-2 py-1 rounded-full">
-                      <Star className="w-3.5 h-3.5 fill-yellow-400 text-yellow-400" />
-                      <span className="text-sm font-bold">{review.rating}</span>
-                    </div>
-                  </div>
-                  <p className="text-sm leading-relaxed pl-11">{review.comment}</p>
-                </div>
-              ))}
-              {market.reviews.length === 0 && (
-                <p className="text-sm text-muted-foreground text-center py-4 italic">
-                  Sé el primero en comentar
-                </p>
-              )}
-            </div>
+          {showUnifiedComments && (
+            <CommentsSection
+              puestoId={parseInt(market.id)}
+              className="pt-3"
+            />
           )}
         </div>
       </CardContent>

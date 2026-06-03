@@ -1,4 +1,4 @@
-from fastapi import APIRouter, Depends
+from fastapi import APIRouter, Depends, Query
 from supabase import Client
 from app.database import get_authed_db, get_db
 from app.dependencies import get_current_user
@@ -10,8 +10,10 @@ from app.models.interaccion import (
     EliminarFavoritoResponse, ListaFavoritosResponse,
     ListaCalificacionesResponse,
     ListaInteraccionesResponse,
+    ListaInteraccionesPuestoResponse,
 )
 from app.services import interaccion_service as service
+from typing import Optional
 
 router = APIRouter(prefix="/interaccion", tags=["Interacción con los Puestos"])
 
@@ -72,12 +74,39 @@ async def obtener_calificaciones(
     supabase = get_authed_db(current_user["token"])
     return await service.obtener_calificaciones_usuario(supabase, current_user["id"])
 
-@router.get("/puestos/{puesto_id}/interacciones", response_model=ListaInteraccionesResponse)
+@router.get("/puestos/{puesto_id}/interacciones", response_model=ListaInteraccionesPuestoResponse)
 async def obtener_interacciones_puesto(
-    puesto_id: str,
+    puesto_id: int,
+    limite: int = Query(50, ge=1, le=100),
+    offset: int = Query(0, ge=0),
+    tipo: Optional[str] = Query(None, pattern="^(calificacion|denuncia)$"),
+    supabase: Client = Depends(get_db),
 ):
-    supabase = get_db()
-    return await service.obtener_interacciones_puesto(puesto_id, supabase)
+    """
+    Endpoint para obtener todas las interacciones (calificaciones + denuncias)
+    de un puesto específico desde la vista unificada.
+    
+    **Parámetros de query:**
+    - `limite`: Número de registros por página (default: 50, máx: 100)
+    - `offset`: Para paginación (default: 0)
+    - `tipo`: Filtrar por tipo de interacción ('calificacion' o 'denuncia')
+    
+    **Respuesta:**
+    - `puesto_id`: ID del puesto
+    - `total_calificaciones`: Cantidad total de calificaciones
+    - `promedio_estrellas`: Promedio de calificación del puesto
+    - `total_denuncias`: Cantidad total de denuncias
+    - `denuncias_pendientes`: Denuncias aún no revisadas
+    - `interacciones`: Array paginado de interacciones (calificaciones + denuncias)
+    """
+    return await service.obtener_interacciones_puesto(
+        puesto_id=puesto_id,
+        supabase=supabase,
+        limite=limite,
+        offset=offset,
+        tipo_filtro=tipo,
+    )
+
 
 @router.get("/usuario/interacciones", response_model=ListaInteraccionesResponse)
 async def obtener_mis_interacciones(

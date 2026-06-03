@@ -115,13 +115,27 @@ class InteraccionResponse(BaseModel):
     tipo: str
     interaccion_id: int
     puesto_id: int
-    usuario_id: str
+    usuario_id: Optional[str]
     puntuacion: Optional[int]
-    texto: str
+    texto: Optional[str]
     fecha: datetime
     precio_detectado: Optional[float]
     estado: Optional[str]
 
 class ListaInteraccionesResponse(BaseModel):
     total: int
+    interacciones: list[InteraccionResponse]
+
+
+# ─────────────────────────────────────────────
+# Interacciones Unificadas (Nueva versión mejorada)
+# ─────────────────────────────────────────────
+
+class ListaInteraccionesPuestoResponse(BaseModel):
+    """Respuesta con todas las interacciones de un puesto + estadísticas"""
+    puesto_id: int
+    total_calificaciones: int
+    promedio_estrellas: float
+    total_denuncias: int
+    denuncias_pendientes: int
     interacciones: list[InteraccionResponse]
