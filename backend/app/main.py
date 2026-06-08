@@ -9,10 +9,15 @@ app = FastAPI(
     version="1.0.1",
 )
 
-# CORS: permite que el frontend Next.js en localhost llame al backend
+# CORS: permite que el frontend Next.js llame al backend desde desarrollo local, Vercel y AWS
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["http://localhost:3000", "https://simprecios.vercel.app"],
+    allow_origins=[
+        "http://localhost:3000",           # Desarrollo local
+        "https://simprecios.vercel.app",   # Producción en Vercel
+        "http://3.141.164.208",            # Frontend en AWS (sin puerto)
+        "http://3.141.164.208:3000",       # Frontend en AWS con puerto 3000
+    ],
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],

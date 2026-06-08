@@ -1,4 +1,5 @@
 import { apiClient } from './config';
+import { API } from '@/config/api';
 
 export interface UserProfile {
   id: string;
@@ -14,7 +15,7 @@ export interface UserProfile {
  */
 export async function getUserProfile(token: string): Promise<UserProfile> {
   try {
-    const response = await fetch('http://localhost:8000/api/auth/profile', {
+    const response = await fetch(`${API.BASE_URL}/api/auth/profile`, {
       method: 'GET',
       headers: {
         'Authorization': `Bearer ${token}`,
@@ -41,7 +42,7 @@ export async function getUserProfile(token: string): Promise<UserProfile> {
  */
 export async function createUserProfile(token: string): Promise<UserProfile> {
   try {
-    const response = await fetch('http://localhost:8000/api/auth/profile/create', {
+    const response = await fetch(`${API.BASE_URL}/api/auth/profile/create`, {
       method: 'POST',
       headers: {
         'Authorization': `Bearer ${token}`,

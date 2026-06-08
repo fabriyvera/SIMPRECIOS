@@ -1,4 +1,3 @@
-# app/routers/prices.py
 from fastapi import APIRouter, HTTPException, Depends
 from pydantic import BaseModel
 from app.database import get_db
