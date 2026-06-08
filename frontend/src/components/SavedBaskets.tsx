@@ -8,30 +8,43 @@ import { Market } from "@/types";
 
 interface SavedBasketsProps {
   markets: Market[];
-  // NUEVO: Propiedad para avisarle a HomeClient que queremos modificar
   onModifyBasket?: (basket: any) => void; 
 }
 
 export function SavedBaskets({ markets, onModifyBasket }: SavedBasketsProps) {
+  const [usuarioActivo, setUsuarioActivo] = useState<any>(null); // NUEVO: Estado del usuario
   const [baskets, setBaskets] = useState<any[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [recalculatingId, setRecalculatingId] = useState<string | null>(null);
   const [recalculatedResults, setRecalculatedResults] = useState<Record<string, any>>({});
 
   useEffect(() => {
-    fetchBaskets();
+    verificarSesion();
   }, []);
 
-  const fetchBaskets = async () => {
+  // 1. Primero verificamos quién es el usuario
+  const verificarSesion = async () => {
     setIsLoading(true);
+    const supabase = createClient();
+    const { data: { user } } = await supabase.auth.getUser();
+
+    if (user) {
+      setUsuarioActivo(user);
+      fetchBaskets(user.id); // Si hay usuario, buscamos SUS canastas
+    } else {
+      setIsLoading(false); // Si no hay usuario, apagamos la carga y mostramos el bloqueo visual
+    }
+  };
+
+  // 2. Buscamos las canastas usando el ID real
+  const fetchBaskets = async (userId: string) => {
     try {
       const supabase = createClient();
-      const usuarioIdPrueba = "31c3b38e-6c7b-4876-bedf-a46fe1d654ef"; 
-
+      
       const { data, error } = await supabase
         .from("canastas_favoritas")
         .select("*")
-        .eq("usuario_id", usuarioIdPrueba)
+        .eq("usuario_id", userId) // USAMOS EL ID REAL AQUÍ
         .order("fecha_creacion", { ascending: false });
 
       if (error) throw error;
@@ -78,6 +91,32 @@ export function SavedBaskets({ markets, onModifyBasket }: SavedBasketsProps) {
     }, 1500); 
   };
 
+  // 3. BLOQUEO VISUAL: Si ya terminó de cargar y no hay usuario, mostramos el mensaje
+  if (!isLoading && !usuarioActivo) {
+    return (
+      <div className="px-2 py-4 w-full">
+        <div className="flex items-center gap-4 mb-8">
+          <div className="bg-slate-50 p-3 rounded-xl border border-slate-200 shadow-sm">
+            <History className="w-6 h-6 text-slate-700" />
+          </div>
+          <div>
+            <h2 className="text-xl font-extrabold tracking-tight text-slate-900">Mis Canastas Guardadas</h2>
+            <p className="text-sm text-slate-500 font-medium mt-1">Recalcula tus compras frecuentes con precios de hoy.</p>
+          </div>
+        </div>
+
+        <div className="flex flex-col items-center justify-center py-16 px-4 text-center bg-white rounded-2xl border border-slate-200 shadow-sm">
+          <History className="w-12 h-12 text-slate-300 mb-4" />
+          <h3 className="text-xl font-extrabold text-slate-800 mb-2">Inicia sesión para continuar</h3>
+          <p className="text-slate-500 font-medium max-w-sm mb-6">
+            Debes tener una cuenta activa para poder guardar y recalcular tus canastas frecuentes.
+          </p>
+        </div>
+      </div>
+    );
+  }
+
+  // Si pasa la validación y hay usuario, renderizamos la lista normal
   return (
     <div className="px-2 py-4 w-full">
       <div className="flex items-center gap-4 mb-8">
