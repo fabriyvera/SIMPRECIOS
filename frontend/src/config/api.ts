@@ -1,5 +1,5 @@
 export const API = {
-  BASE_URL: process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000',
+  BASE_URL: process.env.NEXT_PUBLIC_API_URL as string,
   VERSION: 'v1',
   TIMEOUT: 10000,
   RETRY_COUNT: 3,
@@ -19,19 +19,20 @@ export const API = {
     CALIFICAR: '/api/interaccion/puestos/{puesto_id}/calificar',
     DENUNCIAR: '/api/interaccion/puestos/{puesto_id}/denunciar',
     VERIFICAR_PRECIO: '/api/interaccion/puestos/{puesto_id}/verificar-precio',
-    GET_CALIFICACIONES: '/interaccion/calificaciones',
+    GET_CALIFICACIONES: '/api/interaccion/calificaciones',
     
     // Favoritos
-    AGREGAR_FAVORITO: '/interaccion/favoritos/{puesto_id}',
-    ELIMINAR_FAVORITO: '/interaccion/favoritos/{puesto_id}',
-    LISTAR_FAVORITOS: '/interaccion/favoritos',
+    AGREGAR_FAVORITO: '/api/interaccion/favoritos/{puesto_id}',
+    ELIMINAR_FAVORITO: '/api/interaccion/favoritos/{puesto_id}',
+    LISTAR_FAVORITOS: '/api/interaccion/favoritos',
     
     // Usuario
     OBTENER_INTERACCIONES_USUARIO: '/api/interaccion/usuario/interacciones',
     OBTENER_INTERACCIONES_PUESTO: '/api/interaccion/puestos/{puesto_id}/interacciones',
   },
 };
-
+console.log("API URL:", process.env.NEXT_PUBLIC_API_URL);
+console.log("BASE_URL:", API.BASE_URL);
 export const buildUrl = (endpoint: string, params?: Record<string, string | number>): string => {
   let url = endpoint;
   if (params) {

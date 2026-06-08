@@ -5,7 +5,7 @@ class APIClient {
   private timeout: number;
   private retryCount: number;
 
-  constructor(baseUrl: string = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000', timeout: number = 10000, retryCount: number = 3) {
+  constructor(baseUrl: string = process.env.NEXT_PUBLIC_API_URL as string, timeout: number = 10000, retryCount: number = 3) {
     this.baseUrl = baseUrl;
     this.timeout = timeout;
     this.retryCount = retryCount;

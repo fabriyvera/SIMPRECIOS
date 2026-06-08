@@ -6,19 +6,28 @@ from app.config import settings
 security = HTTPBearer()
 
 def get_current_user(credentials: HTTPAuthorizationCredentials = Depends(security)):
+    print("=== GET_CURRENT_USER ===")
+    print("credentials:", credentials)
+
     token = credentials.credentials
+
     try:
         client = create_client(settings.SUPABASE_URL, settings.SUPABASE_SERVICE_KEY)
+
         user = client.auth.get_user(token)
+
+        print("user:", user)
+
         if not user or not user.user:
             raise HTTPException(status_code=401, detail="Token inválido")
+
         return {
             "id": user.user.id,
             "email": user.user.email,
             "role": "authenticated",
             "token": token,
         }
+
     except Exception as e:
+        print("ERROR AUTH:", str(e))
         raise HTTPException(status_code=401, detail=f"No autenticado: {str(e)}")
-    
-    
