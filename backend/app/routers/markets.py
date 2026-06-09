@@ -12,8 +12,8 @@ app = FastAPI(
 # CORS: permite que el frontend Next.js en localhost llame al backend
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["http://localhost:3000", "https://simprecios.vercel.app"],
-    allow_credentials=True,
+    allow_origins=["*"],
+    allow_credentials=False,
     allow_methods=["*"],
     allow_headers=["*"],
 )
