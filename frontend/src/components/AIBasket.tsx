@@ -359,7 +359,7 @@ export function AIBasket({ markets, initialData }: AIBasketProps) {
                   <div>
                     <h3 className="font-black text-lg italic leading-none">🛡️ MODO AHORRO EXTREMO</h3>
                     <p className="text-sm opacity-90 font-medium mt-1">
-                      Hemos retirado los productos más costosos (como carnes y pollo) de tu lista para garantizar que tus Bs. {generatedBasket.weeklyBudget} te alcancen para llevar suficientes verduras y tubérculos para los 7 días completos.
+                      Hemos retirado los productos más costosos de tu lista para garantizar que tus Bs. {generatedBasket.weeklyBudget} te alcancen para llevar suficientes verduras y tubérculos para los 7 días completos.
                     </p>
                   </div>
                 </div>
