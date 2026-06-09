@@ -36,14 +36,11 @@ async def get_all_stalls(
 
         processed_stalls: List[StallWithDistance] = []
         for stall_data in response.data:
-            market_info = stall_data.get("mercado")
-            # Ignorar puestos si su mercado no tiene coordenadas válidas
-            if not market_info or market_info.get("lat") is None or market_info.get("lng") is None:
-                continue
-
             stall = StallWithDistance.parse_obj(stall_data)
 
-            if lat is not None and lng is not None:
+            # Solo calcular distancia si se provee la ubicación del usuario
+            # y el puesto (a través de su mercado) tiene coordenadas válidas.
+            if lat is not None and lng is not None and stall.mercado and stall.mercado.lat is not None and stall.mercado.lng is not None:
                 distance = calculate_distance(lat, lng, stall.mercado.lat, stall.mercado.lng)
                 stall.distancia_km = round(distance, 2)
 
