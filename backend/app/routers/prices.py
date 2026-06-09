@@ -19,6 +19,27 @@ async def update_or_insert_price(
     try:
         supabase = get_authed_db(current_user["token"])
         
+        print(f"=== DEBUG UPDATE ===")
+        print(f"current_user id: {current_user['id']}")
+        print(f"puesto_id: {payload.puesto_id}")
+        print(f"producto_id: {payload.producto_id}")
+        
+        puesto = supabase.table("puestos_venta")\
+            .select("id, vendedora_id")\
+            .eq("id", payload.puesto_id)\
+            .execute()
+        print(f"Puesto encontrado: {puesto.data}")
+        
+        # Intentar el update y ver cuántas filas afectó
+        resultado = supabase.table("stock_vendedora").update({
+            "precio_actual": payload.precio_actual
+        }).eq("puesto_id", payload.puesto_id).eq("producto_id", payload.producto_id).execute()
+        
+        print(f"Resultado UPDATE: {resultado.data}")
+        print(f"Filas afectadas: {len(resultado.data) if resultado.data else 0}")
+        print(f"===================")
+        
+        
         if payload.producto_id == 0:
             nuevo_prod = supabase.table("productos_mercado").insert({
                 "nombre_producto": payload.nombre_producto,
