@@ -1,7 +1,7 @@
 "use client";
 
 import { useState, useEffect } from "react";
-import { Sparkles, Users, DollarSign, ShoppingCart, TrendingDown, CheckCircle, AlertTriangle, Save, ArrowRight, ArrowLeft, ChevronDown, ChevronUp } from "lucide-react";
+import { Sparkles, Users, DollarSign, ShoppingCart, TrendingDown, CheckCircle, AlertTriangle, Save, ArrowRight, ArrowLeft, ChevronDown, ChevronUp, Info, X } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -30,24 +30,19 @@ interface GeneratedBasket {
   membersServed: number;
   weeklyBudget: number;
   daysCovered: number;
-  wasPruned: boolean; // NUEVO: Para saber si se activó el Modo Ahorro Extremo
+  wasPruned: boolean;
 }
 
 const ESSENTIALS = [
-  // Verduras
   { category: "Verduras", name: "Papa", baseQty: 3, basePrice: 7.00 },
   { category: "Verduras", name: "Tomate", baseQty: 2, basePrice: 8.00 },
   { category: "Verduras", name: "Brocoli", baseQty: 1, basePrice: 9.00 },
   { category: "Verduras", name: "Apio", baseQty: 1, basePrice: 4.00 },
   { category: "Verduras", name: "Chuño", baseQty: 1, basePrice: 12.00 },
-  
-  // Frutas
   { category: "Frutas", name: "Platano", baseQty: 2, basePrice: 6.00 },
   { category: "Frutas", name: "Manzana", baseQty: 1, basePrice: 10.00 },
   { category: "Frutas", name: "Naranja", baseQty: 2, basePrice: 8.00 },
   { category: "Frutas", name: "Piña", baseQty: 1, basePrice: 10.00 },
-  
-  // Carnes (Res, Pollo y Pescado unificados según la BD)
   { category: "Carnes", name: "Pechuga de pollo", baseQty: 1, basePrice: 22.00 },
   { category: "Carnes", name: "Pierna de pollo", baseQty: 1, basePrice: 18.00 },
   { category: "Carnes", name: "Alitas de pollo", baseQty: 1, basePrice: 20.00 },
@@ -65,42 +60,41 @@ const CATEGORY_ICONS: Record<string, string> = {
 };
 
 export function AIBasket({ markets, initialData }: AIBasketProps) {
-  // Estados de navegación
   const [step, setStep] = useState(1); 
-  
-  // Estados de Configuración (Paso 1)
   const [members, setMembers] = useState("4");
   const [budget, setBudget] = useState("500");
-
-  // Estados de Preferencias Granulares (Paso 2)
   const [selectedItems, setSelectedItems] = useState<string[]>(ESSENTIALS.map(i => i.name));
   const [showAdvanced, setShowAdvanced] = useState(false);
-
-  // Estados de Resultados (Paso 3)
   const [generatedBasket, setGeneratedBasket] = useState<GeneratedBasket | null>(null);
   const [isGenerating, setIsGenerating] = useState(false);
   const [isSaving, setIsSaving] = useState(false);
+  
+  // NUEVO ESTADO: Para controlar la notificación tipo Toast
+  const [toastMessage, setToastMessage] = useState<{ message: string; type: "error" | "success" } | null>(null);
 
-  // Escuchar si llega una canasta para modificar
   useEffect(() => {
     if (initialData) {
-      // 1. Rellenar personas y presupuesto
       setMembers(initialData.cantidad_familiares?.toString() || "4");
       setBudget(initialData.presupuesto_semanal_bs?.toString() || "500");
       
-      // 2. Marcar automáticamente los checkboxes de los productos guardados
       if (initialData.items) {
         const savedProductNames = initialData.items.map((item: any) => item.productName);
         setSelectedItems(savedProductNames);
       }
       
-      // 3. Saltar directamente al Paso 2 y abrir el acordeón para que el usuario vea su lista
       setStep(1);
       setShowAdvanced(true);
     }
   }, [initialData]);
 
-  // Manejo de Checkboxes granulares
+  // Función auxiliar para mostrar notificaciones que se ocultan solas
+  const showToast = (message: string, type: "error" | "success" = "error") => {
+    setToastMessage({ message, type });
+    setTimeout(() => {
+      setToastMessage(null);
+    }, 4000); // Se oculta después de 4 segundos
+  };
+
   const toggleItem = (name: string) => {
     setSelectedItems(prev => 
       prev.includes(name) ? prev.filter(i => i !== name) : [...prev, name]
@@ -119,7 +113,6 @@ export function AIBasket({ markets, initialData }: AIBasketProps) {
       
       const filteredEssentials = ESSENTIALS.filter(item => selectedItems.includes(item.name));
 
-      // 1. La IA genera primero la lista ideal completa ajustada por tamaño familiar
       for (const essential of filteredEssentials) {
         const quantity = Math.ceil(essential.baseQty * scaleFactor);
         let bestMarket: Market | null = null;
@@ -146,15 +139,11 @@ export function AIBasket({ markets, initialData }: AIBasketProps) {
         });
       }
 
-      // 2. ALGORITMO DE PODA (Canasta de Supervivencia)
-      // Si el costo total supera el presupuesto, la IA empieza a sacrificar lo más caro
       let wasPruned = false;
       
       while (tempBasket.reduce((sum, item) => sum + item.totalPrice, 0) > weeklyBudget && tempBasket.length > 0) {
         wasPruned = true;
-        // Ordenamos la lista para dejar el producto con mayor precio unitario al principio (índice 0)
         tempBasket.sort((a, b) => b.unitPrice - a.unitPrice);
-        // Eliminamos el producto más costoso por kilo del mercado
         tempBasket.shift(); 
       }
 
@@ -167,7 +156,7 @@ export function AIBasket({ markets, initialData }: AIBasketProps) {
         savings, 
         membersServed: numMembers, 
         weeklyBudget,
-        daysCovered: 7, // Como se redimensionó el contenido, lo que quedó cubre los 7 días
+        daysCovered: 7, 
         wasPruned
       });
       setIsGenerating(false);
@@ -178,13 +167,21 @@ export function AIBasket({ markets, initialData }: AIBasketProps) {
     setIsSaving(true);
     try {
       const supabase = createClient();
-      const usuarioIdPrueba = "31c3b38e-6c7b-4876-bedf-a46fe1d654ef"; 
+      
+      const { data: { user } } = await supabase.auth.getUser();
+
+      if (!user) {
+        // En lugar del alert() nativo, usamos nuestra notificación moderna
+        showToast("Por favor inicia sesion para agregar favoritos", "error");
+        setIsSaving(false); 
+        return; 
+      }
 
       const { data, error } = await supabase
         .from('canastas_favoritas')
         .insert([
           {
-            usuario_id: usuarioIdPrueba,
+            usuario_id: user.id,
             nombre_canasta: generatedBasket?.wasPruned ? `Canasta Supervivencia (${generatedBasket?.membersServed} pers.)` : `Canasta IA (${generatedBasket?.membersServed} pers.)`,
             presupuesto_semanal_bs: generatedBasket?.weeklyBudget,
             items: generatedBasket?.items
@@ -192,10 +189,10 @@ export function AIBasket({ markets, initialData }: AIBasketProps) {
         ]);
 
       if (error) throw error;
-      alert("¡Éxito! La canasta se guardó en tu base de datos Supabase.");
+      showToast("¡Canasta guardada exitosamente!", "success");
     } catch (error) {
       console.error("Error al guardar en Supabase:", error);
-      alert("Error al guardar. Revisa la consola de tu navegador.");
+      showToast("Hubo un error al intentar guardar", "error");
     } finally {
       setIsSaving(false);
     }
@@ -209,7 +206,19 @@ export function AIBasket({ markets, initialData }: AIBasketProps) {
   };
 
   return (
-    <div className="px-4 py-4 pb-20 max-w-2xl mx-auto">
+    <div className="px-4 py-4 pb-20 max-w-2xl mx-auto relative">
+      
+      {/* NOTIFICACIÓN TOAST FLOTANTE */}
+      {toastMessage && (
+        <div className={`fixed bottom-24 left-1/2 transform -translate-x-1/2 px-4 py-3 rounded-xl shadow-xl flex items-center gap-3 z-50 animate-in fade-in slide-in-from-bottom-5 w-max max-w-[90%] transition-all ${toastMessage.type === 'error' ? 'bg-blue-500 text-white' : 'bg-emerald-500 text-white'}`}>
+          {toastMessage.type === 'error' ? <Info className="w-5 h-5 flex-shrink-0" /> : <CheckCircle className="w-5 h-5 flex-shrink-0" />}
+          <span className="font-medium text-sm">{toastMessage.message}</span>
+          <button onClick={() => setToastMessage(null)} className="ml-2 hover:bg-white/20 p-1 rounded-md transition-colors">
+            <X className="w-4 h-4" />
+          </button>
+        </div>
+      )}
+
       {/* Header Fijo */}
       <div className="mb-6 flex items-center justify-between">
         <div className="flex items-center gap-3">
@@ -262,7 +271,6 @@ export function AIBasket({ markets, initialData }: AIBasketProps) {
       {step === 2 && (
         <div className="bg-white rounded-2xl shadow-xl p-7 border border-slate-100 animate-in fade-in slide-in-from-right-4 duration-500">
           
-          {/* Cabecera elegante */}
           <div className="flex items-start gap-4 mb-8">
              <div className="bg-slate-50 p-3 rounded-xl border border-slate-200 shadow-sm">
                <ShoppingCart className="w-6 h-6 text-slate-700" />
@@ -274,7 +282,6 @@ export function AIBasket({ markets, initialData }: AIBasketProps) {
           </div>
 
           <div className="space-y-6">
-            {/* Botón de Acordeón Minimalista */}
             <button 
               onClick={() => setShowAdvanced(!showAdvanced)}
               className="w-full flex items-center justify-between p-4 bg-white rounded-xl border border-slate-200 hover:border-purple-300 hover:shadow-sm transition-all duration-200 group"
@@ -286,12 +293,10 @@ export function AIBasket({ markets, initialData }: AIBasketProps) {
               {showAdvanced ? <ChevronUp className="w-5 h-5 text-slate-400" /> : <ChevronDown className="w-5 h-5 text-slate-400" />}
             </button>
 
-            {/* Panel de Selección Avanzada */}
             {showAdvanced && (
               <div className="grid grid-cols-1 gap-6 pt-2 max-h-[380px] overflow-y-auto px-1 pb-4">
                 {["Verduras", "Frutas", "Carnes"].map(cat => (
                   <div key={cat} className="space-y-4">
-                    {/* Separador de Categoría Elegante */}
                     <div className="flex items-center gap-3 pb-2 border-b border-slate-100">
                       <span className="text-lg bg-slate-50 p-1.5 rounded-lg border border-slate-100">{CATEGORY_ICONS[cat]}</span>
                       <h4 className="text-xs font-bold text-slate-400 uppercase tracking-widest">
@@ -299,7 +304,6 @@ export function AIBasket({ markets, initialData }: AIBasketProps) {
                       </h4>
                     </div>
                     
-                    {/* Grid de Checkboxes Profesionales */}
                     <div className="grid grid-cols-2 gap-3">
                       {ESSENTIALS.filter(i => i.category === cat).map(item => {
                         const isSelected = selectedItems.includes(item.name);
@@ -314,7 +318,6 @@ export function AIBasket({ markets, initialData }: AIBasketProps) {
                             }`}
                           >
                             <span className="truncate pr-3">{item.name}</span>
-                            {/* Icono de Checkbox limpio */}
                             <div className={`flex-shrink-0 w-5 h-5 rounded-md border flex items-center justify-center transition-all duration-200 ${
                               isSelected 
                               ? "bg-purple-600 border-purple-600 shadow-sm shadow-purple-200" 
@@ -331,7 +334,6 @@ export function AIBasket({ markets, initialData }: AIBasketProps) {
               </div>
             )}
 
-            {/* Call To Action (Botón Principal) */}
             <Button onClick={generateBasket} className="w-full h-14 bg-slate-900 hover:bg-slate-800 text-white font-semibold text-lg rounded-xl shadow-lg hover:shadow-xl transition-all mt-4 border border-slate-800">
               Ejecutar Motor de IA <Sparkles className="ml-2 w-5 h-5 text-purple-400" />
             </Button>
@@ -351,7 +353,6 @@ export function AIBasket({ markets, initialData }: AIBasketProps) {
           ) : generatedBasket && (
             <div className="space-y-4">
               
-              {/* Alerta Dinámica (HU-13) */}
               {generatedBasket.wasPruned ? (
                 <div className="bg-gradient-to-r from-amber-500 to-orange-600 rounded-3xl p-5 text-white shadow-lg flex items-center gap-4">
                   <div className="bg-white/20 p-3 rounded-2xl"><AlertTriangle className="w-8 h-8" /></div>
@@ -372,7 +373,6 @@ export function AIBasket({ markets, initialData }: AIBasketProps) {
                 </div>
               )}
 
-              {/* Resumen de Costos */}
               <div className="grid grid-cols-2 gap-3">
                 <div className="bg-white p-5 rounded-3xl shadow-md border border-gray-100">
                   <p className="text-xs font-black text-gray-400 uppercase tracking-widest mb-1">Costo de Compra</p>
@@ -384,7 +384,6 @@ export function AIBasket({ markets, initialData }: AIBasketProps) {
                 </div>
               </div>
 
-              {/* Lista de Productos por Categoría */}
               {Object.entries(groupByCategory(generatedBasket.items)).map(([category, items]) => (
                 <div key={category} className="bg-white rounded-3xl shadow-lg border border-gray-100 overflow-hidden">
                   <div className="bg-gray-50 px-5 py-3 border-b border-gray-100 flex justify-between items-center">
