@@ -1,6 +1,7 @@
 from fastapi import APIRouter, HTTPException, Depends
 from pydantic import BaseModel
-from app.database import get_db
+from app.database import get_authed_db
+from app.dependencies import get_current_user
 
 router = APIRouter()
 
@@ -11,9 +12,12 @@ class PriceUpdatePayload(BaseModel):
     nombre_producto: str
 
 @router.put("/update")
-async def update_or_insert_price(payload: PriceUpdatePayload):
+async def update_or_insert_price(
+    payload: PriceUpdatePayload,
+    current_user: dict = Depends(get_current_user)
+):
     try:
-        supabase = get_db()
+        supabase = get_authed_db(current_user["token"])
         
         if payload.producto_id == 0:
             nuevo_prod = supabase.table("productos_mercado").insert({
@@ -29,6 +33,7 @@ async def update_or_insert_price(payload: PriceUpdatePayload):
             nuevo_id_maestro = nuevo_prod_data[0].get("id")
             if nuevo_id_maestro is None:
                 raise HTTPException(status_code=500, detail="Respuesta inválida de Supabase")
+            
             resultado = supabase.table("stock_vendedora").insert({
                 "puesto_id": payload.puesto_id,
                 "producto_id": nuevo_id_maestro,
@@ -57,10 +62,15 @@ async def update_or_insert_price(payload: PriceUpdatePayload):
         print(f"Error interno en la base de datos: {str(e)}")
         raise HTTPException(status_code=500, detail=str(e))
 
+
 @router.delete("/{puesto_id}/{producto_id}")
-async def delete_vendor_product(puesto_id: int, producto_id: int):
+async def delete_vendor_product(
+    puesto_id: int,
+    producto_id: int,
+    current_user: dict = Depends(get_current_user)
+):
     try:
-        supabase = get_db()
+        supabase = get_authed_db(current_user["token"])
         resultado = supabase.table("stock_vendedora") \
             .delete() \
             .eq("puesto_id", puesto_id) \
@@ -76,10 +86,14 @@ async def delete_vendor_product(puesto_id: int, producto_id: int):
         print(f"Error al eliminar producto del puesto: {str(e)}")
         raise HTTPException(status_code=500, detail=str(e))
 
+
 @router.get("/vendor-puestos/{vendedora_id}")
-async def get_vendor_specific_markets(vendedora_id: str):
+async def get_vendor_specific_markets(
+    vendedora_id: str,
+    current_user: dict = Depends(get_current_user)
+):
     try:
-        supabase = get_db()
+        supabase = get_authed_db(current_user["token"])
         id_limpio = str(vendedora_id).strip().lower()
         
         print(f"Procesando consulta de puestos para la vendedora UUID: {id_limpio}")
@@ -110,7 +124,6 @@ async def get_vendor_specific_markets(vendedora_id: str):
         puestos_formateados = []
         if db_data:
             for index, db_market in enumerate(db_data):
-                # ensure db_market is a mapping before accessing .get to satisfy static analysis
                 if not isinstance(db_market, dict):
                     print(f"Skipping non-dict mercado entry at index {index}: {repr(db_market)}")
                     continue
@@ -146,15 +159,15 @@ async def get_vendor_specific_markets(vendedora_id: str):
                 imagen_estetica = (
                     "https://images.unsplash.com/photo-1603048588665-791ca8aea617?w=500&auto=format&fit=crop&q=60"
                     if es_carne else 
-                    ("https://images.unsplash.com/photo-1534604973900-c43ab4c2e0ab?w=500&auto=format&fit=crop&q=60" if es_pescado else "https://images.unsplash.com/photo-1542838132-92c53300491e?w=500&auto=format&fit=crop&q=60")
+                    ("https://images.unsplash.com/photo-1534604973900-c43ab4c2e0ab?w=500&auto=format&fit=crop&q=60" 
+                     if es_pescado else 
+                     "https://images.unsplash.com/photo-1542838132-92c53300491e?w=500&auto=format&fit=crop&q=60")
                 )
                 
-                # resolve mercado name safely: sometimes 'mercado' may be a dict, str, int or None
                 mercado_field = db_market.get("mercado")
                 if isinstance(mercado_field, dict):
                     mercado_nombre = mercado_field.get("nombre")
                 else:
-                    # if it's already a string (or other scalar), use it directly
                     mercado_nombre = mercado_field
 
                 puestos_formateados.append({
