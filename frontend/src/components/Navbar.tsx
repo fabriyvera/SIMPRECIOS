@@ -1,9 +1,10 @@
 "use client";
 
-import { useState, useEffect } from "react";
 import { Home, MapPin, Sparkles, Store, LogOut } from "lucide-react";
 import { Avatar } from "@/components/ui/avatar";
 import { AppView, SessionUser } from "@/types";
+import { useState, useEffect, useRef } from "react";
+import Link from "next/link";
 import { createClient } from '@/utils/supabase/client';
 
 interface NavbarProps {
@@ -17,29 +18,71 @@ export function Navbar({
   onViewChange,
   sessionUser,
 }: NavbarProps) {
+  const [isLoggedIn, setIsLoggedIn] = useState(false);
+  const [userName, setUserName] = useState("");
+  const [userInitial, setUserInitial] = useState("");
+  
+  // INYECCIÓN DE ALEXIA: Estado para controlar si el menú está abierto o cerrado firmemente
   const [isMenuOpen, setIsMenuOpen] = useState(false);
+  const menuRef = useRef<HTMLDivElement>(null);
+
   const supabase = createClient();
-
-  // No necesitamos un estado isLoggedIn separado, podemos usar sessionUser directamente
-
-  const handleLogout = async () => {
-    try {
-      await supabase.auth.signOut();
-      setIsMenuOpen(false);
-      // onViewChange("home"); // ya no es necesario porque el evento SIGNED_OUT en HomeClient actualizará la vista
-      // No recargamos la página, confiamos en onAuthStateChange
-    } catch (error) {
-      console.error('Error al cerrar sesión:', error);
-    }
-  };
-
   const navItems = [
     { id: "home" as const, icon: Home, label: "Inicio" },
     { id: "map" as const, icon: MapPin, label: "Buscar" },
     { id: "ai" as const, icon: Sparkles, label: "IA" },
   ];
 
-  const isLoggedIn = !!sessionUser;
+  useEffect(() => {
+    const fetchSession = async () => {
+      const { data: { session } } = await supabase.auth.getSession();
+      if (session) {
+        setIsLoggedIn(true);
+        const name = session.user.user_metadata?.nombre_completo || "Usuario";
+        setUserName(name);
+        setUserInitial(name.charAt(0).toUpperCase());
+      }
+    };
+    fetchSession();
+
+    const { data: { subscription } } = supabase.auth.onAuthStateChange((_event, session) => {
+      if (session) {
+        setIsLoggedIn(true);
+        const name = session.user.user_metadata?.nombre_completo || "Usuario";
+        setUserName(name);
+        setUserInitial(name.charAt(0).toUpperCase());
+      } else {
+        setIsLoggedIn(false);
+        setUserName("");
+        setUserInitial("");
+      }
+    });
+
+    return () => subscription.unsubscribe();
+  }, [supabase]);
+
+  // INYECCIÓN DE ALEXIA: Cerrar el menú si el usuario hace clic afuera de él
+  useEffect(() => {
+    const handleClickOutside = (event: MouseEvent) => {
+      if (menuRef.current && !menuRef.current.contains(event.target as Node)) {
+        setIsMenuOpen(false);
+      }
+    };
+    document.addEventListener("mousedown", handleClickOutside);
+    return () => document.removeEventListener("mousedown", handleClickOutside);
+  }, []);
+
+  const handleLogout = async () => {
+    await supabase.auth.signOut();
+    setIsLoggedIn(false);
+    setIsMenuOpen(false); // Cerramos el menú al salir
+    onViewChange("home"); 
+  };
+
+  const handleProfileClick = () => {
+    setIsMenuOpen(false); // Cerramos el menú al ir al perfil
+    onViewChange("perfil" as AppView);
+  };
 
   return (
     <>
@@ -54,42 +97,38 @@ export function Navbar({
             </div>
           </div>
 
-          {/* Módulo de gestión de usuarios */}
-          {isLoggedIn && sessionUser ? (
-            <div className="relative">
+          {/* INICIO MÓDULO DE GESTIÓN DE USUARIOS */}
+          {isLoggedIn ? (
+            // Agregamos el ref aquí para detectar clics fuera del menú
+            <div className="relative" ref={menuRef}> 
               <button 
-                onClick={() => setIsMenuOpen(!isMenuOpen)}
+                onClick={() => setIsMenuOpen(!isMenuOpen)} // El botón ahora controla el estado
                 className="flex items-center gap-2 bg-white/20 hover:bg-white/30 transition-colors rounded-full pl-2 pr-1 py-1 backdrop-blur-sm cursor-pointer"
               >
                 <span className="text-xs font-bold text-white hidden sm:block">
-                  {sessionUser.user_metadata?.full_name || sessionUser.email?.split('@')[0]}
+                  {userName}
                 </span>
                 <Avatar className="w-8 h-8 border-2 border-white shadow-lg">
                   <div className="w-full h-full bg-gradient-to-br from-yellow-400 to-orange-500 flex items-center justify-center">
                     <span className="text-xs font-bold text-white">
-                      {(sessionUser.user_metadata?.full_name || sessionUser.email)?.[0]?.toUpperCase()}
+                      {userInitial}
                     </span>
                   </div>
                 </Avatar>
               </button>
 
-              {/* Menú Desplegable */}
               {isMenuOpen && (
-                <div className="absolute right-0 mt-2 w-40 bg-white rounded-md shadow-xl py-1 z-50 border border-gray-100">
+                <div className="absolute right-0 mt-2 w-40 bg-white rounded-md shadow-xl py-1 z-50 border border-gray-100 animate-in fade-in slide-in-from-top-2 duration-200">
                   <button
-                    onClick={() => {
-                      onViewChange("perfil" as AppView);
-                      setIsMenuOpen(false);
-                    }}
+                    onClick={handleProfileClick}
                     className="block w-full text-left px-4 py-2 text-sm font-medium text-gray-700 hover:bg-orange-50 hover:text-orange-600 transition-colors"
                   >
                     Mi Perfil
                   </button>
                   <button
                     onClick={handleLogout}
-                    className="block w-full text-left px-4 py-2 text-sm font-medium text-red-600 hover:bg-red-50 transition-colors flex items-center gap-2"
+                    className="block w-full text-left px-4 py-2 text-sm font-medium text-red-600 hover:bg-red-50 transition-colors"
                   >
-                    <LogOut className="w-4 h-4" />
                     Cerrar Sesión
                   </button>
                 </div>
@@ -98,7 +137,7 @@ export function Navbar({
           ) : (
             <div className="flex items-center gap-3">
               <button
-                onClick={() => onViewChange("login")}
+                onClick={() => onViewChange("login" as AppView)}
                 className="text-xs font-bold text-white hover:text-white/80 transition-colors drop-shadow-md cursor-pointer"
               >
                 Ingresar

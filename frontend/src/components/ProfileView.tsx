@@ -1,46 +1,182 @@
 'use client';
 
-import React, { useState } from 'react';
-import { ArrowLeft, Camera, User, Store, Lock, Save } from 'lucide-react';
+import React, { useState, useEffect } from 'react';
+import { ArrowLeft, User, Store, Lock, Save, Mail } from 'lucide-react';
 import { AppView } from '@/types';
+import { createClient } from '@/utils/supabase/client';
 
 interface ProfileViewProps {
   onViewChange: (view: AppView) => void;
 }
 
 export function ProfileView({ onViewChange }: ProfileViewProps) {
-  const [mockRole, setMockRole] = useState<'comprador' | 'vendedora'>('comprador');
-
-  const [name, setName] = useState('Usuario Prueba'); 
-  const [email, setEmail] = useState('correo@ejemplo.com');
-  const [bio, setBio] = useState('Amante de las buenas parrilladas.');
-  const [market, setMarket] = useState('Mercado Rodríguez');
-  const [standNumber, setStandNumber] = useState('Puesto 24');
+  const supabase = createClient();
+  const [loading, setLoading] = useState(true);
+  const [rol, setRol] = useState<string>('comprador');
+  const [name, setName] = useState('');
+  const [phone, setPhone] = useState('');
+  const [email, setEmail] = useState(''); // Estado para el correo
+  const [market, setMarket] = useState('');
+  const [standNumber, setStandNumber] = useState('');
+  const [sector, setSector] = useState('');
   const [currentPassword, setCurrentPassword] = useState('');
   const [newPassword, setNewPassword] = useState('');
   const [confirmNewPassword, setConfirmNewPassword] = useState('');
 
-  const handleSave = (e: React.FormEvent) => {
-    e.preventDefault();
-    
-    if (newPassword || confirmNewPassword) {
-      if (newPassword !== confirmNewPassword) {
-        alert('⚠️ Las contraseñas nuevas no coinciden.');
-        return;
-      }
-      if (!currentPassword) {
-        alert('⚠️ Debes ingresar tu contraseña actual para cambiarla.');
-        return;
-      }
-    }
+  useEffect(() => {
+    const cargarPerfil = async () => {
+      try {
+        const { data: { session } } = await supabase.auth.getSession();
+        if (!session) return;
+        
+        const usuarioId = session.user.id;
+        
+        // Guardamos el correo de la sesión de Supabase
+        setEmail(session.user.email || '');
+        
+        const { data: profileData, error: profileError } = await supabase
+          .from("profiles")
+          .select("nombre_completo, telefono, rol")
+          .eq("id", usuarioId)
+          .single();
 
-    alert('✅ ¡Perfil actualizado con éxito!');
-    console.log('Datos guardados:', { name, email, bio, mockRole, market, standNumber });
+        if (profileError) throw profileError;
+
+        if (profileData) {
+          setName(profileData.nombre_completo || "");
+          setPhone(profileData.telefono || "");
+          setRol(profileData.rol || "comprador");
+          
+          if (profileData.rol === "Vendedora" || profileData.rol === "caserita") {
+            const { data: puestoData, error: puestoError } = await supabase
+              .from("puestos_venta")
+              .select("nombre_puesto, nro_puesto, sector")
+              .eq("vendedora_id", usuarioId)
+              .maybeSingle(); // Cambiado a maybeSingle por si no tiene puesto aún
+            
+            // Si el puesto ya existe, cargamos los datos
+            if (puestoData) {
+              setMarket(puestoData.nombre_puesto || "");
+              setStandNumber(puestoData.nro_puesto || "");
+              setSector(puestoData.sector || "");
+            }
+          }
+        }
+      } catch (error) {
+        console.error("Error cargando perfil:", error);
+      } finally {
+        setLoading(false);
+      }
+    };
+
+    cargarPerfil();
+  }, [supabase]);
+
+  const handleSave = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setLoading(true);
+    
+    try {
+      const { data: { session } } = await supabase.auth.getSession();
+      if (!session) return;
+      const usuarioId = session.user.id;
+      
+      // Lógica de Contraseñas
+      if (newPassword || confirmNewPassword) {
+        if (newPassword !== confirmNewPassword) {
+          alert('⚠️ Las contraseñas nuevas no coinciden.');
+          setLoading(false);
+          return;
+        }
+        if (!currentPassword) {
+          alert('⚠️ Debes ingresar tu contraseña actual para cambiarla.');
+          setLoading(false);
+          return;
+        }
+        const { error: authError } = await supabase.auth.signInWithPassword({
+          email: session.user.email!,
+          password: currentPassword,
+        });
+
+        if (authError) {
+          alert("❌ La contraseña actual es incorrecta.");
+          setLoading(false);
+          return;
+        }
+
+        const { error: updatePassError } = await supabase.auth.updateUser({
+          password: newPassword,
+        });
+
+        if (updatePassError) throw updatePassError;
+      }
+      
+      // Actualizar Profiles (Datos personales)
+      const { error: profileError } = await supabase
+        .from("profiles")
+        .update({
+          nombre_completo: name,
+          telefono: phone,
+        })
+        .eq("id", usuarioId);
+
+      if (profileError) throw profileError;
+      
+      // LÓGICA DE CREAR O ACTUALIZAR EL PUESTO DE LA CASERITA
+      if (rol === "Vendedora" || rol === "caserita") {
+        // Verificamos primero si ya tiene un registro en puestos_venta
+        const { data: puestoExistente } = await supabase
+          .from("puestos_venta")
+          .select("id")
+          .eq("vendedora_id", usuarioId)
+          .maybeSingle();
+
+        if (puestoExistente) {
+          // Si existe, lo ACTUALIZAMOS
+          const { error: updatePuestoError } = await supabase
+            .from("puestos_venta")
+            .update({
+              nombre_puesto: market,
+              nro_puesto: standNumber,
+              sector: sector,
+            })
+            .eq("vendedora_id", usuarioId);
+          if (updatePuestoError) throw updatePuestoError;
+        } else {
+          // Si NO existe, lo CREAMOS
+          const { error: insertPuestoError } = await supabase
+            .from("puestos_venta")
+            .insert({
+              vendedora_id: usuarioId,
+              nombre_puesto: market,
+              nro_puesto: standNumber,
+              sector: sector,
+              esta_abierto: false, // Por defecto cerrado
+            });
+          if (insertPuestoError) throw insertPuestoError;
+        }
+      }
+
+      alert('✅ ¡Perfil actualizado con éxito!');
+      onViewChange('home');
+      
+    } catch(error: any) {
+      alert("❌ Error al guardar los cambios: " + error.message);
+    } finally {
+      setLoading(false);
+    }
   };
+
+  if (loading) {
+    return (
+      <div className="min-h-screen flex items-center justify-center bg-gray-50">
+        <p className="text-orange-600 font-bold animate-pulse text-lg">Cargando tus datos...</p>
+      </div>
+    );
+  }
 
   return (
     <div className="min-h-screen bg-gray-50 pb-12">
-      {/* Header */}
       <div className="bg-gradient-to-r from-orange-500 via-red-500 to-pink-500 p-6 text-white shadow-md relative h-32">
         <button
           onClick={() => onViewChange("home")}
@@ -53,26 +189,20 @@ export function ProfileView({ onViewChange }: ProfileViewProps) {
       <div className="max-w-2xl mx-auto px-4 -mt-16 relative">
         <div className="bg-white rounded-2xl shadow-xl border border-gray-100 p-6 sm:p-8">
           
-          <div className="mb-8 p-4 bg-gray-100 rounded-xl border border-gray-200 flex flex-col sm:flex-row justify-between items-center gap-3">
-            <span className="text-xs font-bold text-gray-500 uppercase tracking-wider text-center sm:text-left">Modo Prueba (Vista):</span>
-            <div className="flex gap-2">
-              <button onClick={() => setMockRole('comprador')} className={`px-4 py-1.5 text-xs font-bold rounded-full transition-all ${mockRole === 'comprador' ? 'bg-orange-500 text-white shadow-md' : 'bg-white text-gray-500 border border-gray-300 hover:bg-gray-50'}`}>Comprador</button>
-              <button onClick={() => setMockRole('vendedora')} className={`px-4 py-1.5 text-xs font-bold rounded-full transition-all ${mockRole === 'vendedora' ? 'bg-pink-500 text-white shadow-md' : 'bg-white text-gray-500 border border-gray-300 hover:bg-gray-50'}`}>Caserita</button>
-            </div>
+          {/* Badge del rol */}
+          <div className="mb-8 flex justify-center">
+             <span className="inline-block bg-orange-100 text-orange-800 px-4 py-1 rounded-full text-xs font-bold uppercase tracking-wider">
+               Rol Actual: {rol}
+             </span>
           </div>
 
           <form onSubmit={handleSave} className="space-y-8">
-            
             <div className="flex flex-col items-center -mt-4">
-              <div className="relative">
-                <div className="w-28 h-28 bg-gray-100 rounded-full border-4 border-white shadow-lg overflow-hidden flex items-center justify-center">
-                  <User className="w-12 h-12 text-gray-400" />
-                </div>
-                <button type="button" className="absolute bottom-1 right-1 bg-orange-500 p-2.5 rounded-full text-white shadow-md hover:bg-orange-600 transition-colors cursor-pointer">
-                  <Camera className="w-4 h-4" />
-                </button>
-              </div>
-              <p className="text-xs font-bold text-gray-400 mt-3 uppercase tracking-wider">Cambiar Foto</p>
+               <div className="w-28 h-28 bg-gradient-to-br from-yellow-400 to-orange-500 rounded-full border-4 border-white shadow-lg overflow-hidden flex items-center justify-center">
+                   <span className="text-4xl font-bold text-white">
+                     {name ? name.charAt(0).toUpperCase() : "U"}
+                   </span>
+               </div>
             </div>
 
             <div className="space-y-4">
@@ -80,43 +210,57 @@ export function ProfileView({ onViewChange }: ProfileViewProps) {
                 <User className="w-5 h-5 text-orange-500" /> Datos Personales
               </h3>
               
+              {/* Cajas de Nombre y Teléfono (Editables) */}
               <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                 <div>
                   <label className="block text-sm font-bold text-gray-700 mb-1">Nombre Completo</label>
                   <input type="text" value={name} onChange={(e) => setName(e.target.value)} required className="w-full px-4 py-3 border border-gray-200 rounded-xl focus:ring-2 focus:ring-orange-500 outline-none bg-gray-50 focus:bg-white transition-colors" />
                 </div>
                 <div>
-                  <label className="block text-sm font-bold text-gray-700 mb-1">Correo / Celular</label>
-                  <input type="text" value={email} onChange={(e) => setEmail(e.target.value)} required className="w-full px-4 py-3 border border-gray-200 rounded-xl focus:ring-2 focus:ring-orange-500 outline-none bg-gray-50 focus:bg-white transition-colors" />
+                  <label className="block text-sm font-bold text-gray-700 mb-1">Celular</label>
+                  <input type="text" value={phone} onChange={(e) => setPhone(e.target.value)} required className="w-full px-4 py-3 border border-gray-200 rounded-xl focus:ring-2 focus:ring-orange-500 outline-none bg-gray-50 focus:bg-white transition-colors" placeholder="Ej: 71234567" />
                 </div>
               </div>
-              
-              <div>
-                <label className="block text-sm font-bold text-gray-700 mb-1">Descripción / Bio</label>
-                <textarea value={bio} onChange={(e) => setBio(e.target.value)} rows={2} className="w-full px-4 py-3 border border-gray-200 rounded-xl focus:ring-2 focus:ring-orange-500 outline-none bg-gray-50 focus:bg-white transition-colors" placeholder="Cuenta un poco sobre ti..." />
+
+              {/* Caja de Correo (Solo Lectura) */}
+              <div className="pt-2">
+                <label className="block text-sm font-bold text-gray-700 mb-1 flex items-center gap-2">
+                  <Mail className="w-4 h-4 text-gray-400" /> Correo Electrónico (Acceso)
+                </label>
+                <input 
+                  type="email" 
+                  value={email} 
+                  disabled 
+                  className="w-full px-4 py-3 border border-gray-200 rounded-xl bg-gray-100 text-gray-500 cursor-not-allowed outline-none" 
+                  title="El correo con el que inicias sesión no se puede modificar aquí"
+                />
               </div>
             </div>
 
-            {mockRole === 'vendedora' && (
+            {(rol === 'Vendedora' || rol === 'caserita') && (
               <div className="space-y-4 p-5 bg-pink-50 rounded-xl border border-pink-100 animate-in fade-in slide-in-from-top-2 duration-300">
                 <h3 className="text-lg font-bold text-pink-800 flex items-center gap-2 border-b border-pink-200 pb-2">
                   <Store className="w-5 h-5" /> Datos del Negocio
                 </h3>
-                
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
                   <div>
-                    <label className="block text-sm font-bold text-gray-700 mb-1">Mercado</label>
-                    <select value={market} onChange={(e) => setMarket(e.target.value)} className="w-full px-4 py-3 border border-gray-200 rounded-xl focus:ring-2 focus:ring-pink-500 outline-none bg-white">
-                      <option value="Mercado Rodríguez">Mercado Rodríguez</option>
-                      <option value="Mercado Lanza">Mercado Lanza</option>
-                      <option value="Mercado Achumani">Mercado Achumani</option>
-                      <option value="Mercado Miraflores">Mercado Miraflores</option>
-                      <option value="Mercado Camacho">Mercado Camacho</option>
-                    </select>
+                    <label className="block text-sm font-bold text-gray-700 mb-1">Nombre Puesto</label>
+                    <input type="text" value={market} onChange={(e) => setMarket(e.target.value)} className="w-full px-4 py-3 border border-gray-200 rounded-xl focus:ring-2 focus:ring-pink-500 outline-none bg-white" placeholder="Ej. Doña Mary" />
                   </div>
                   <div>
-                    <label className="block text-sm font-bold text-gray-700 mb-1">Número de Puesto</label>
-                    <input type="text" value={standNumber} onChange={(e) => setStandNumber(e.target.value)} className="w-full px-4 py-3 border border-gray-200 rounded-xl focus:ring-2 focus:ring-pink-500 outline-none bg-white" placeholder="Ej. Puesto 24" />
+                    <label className="block text-sm font-bold text-gray-700 mb-1">Nro Puesto</label>
+                    {/* INYECCIÓN DE ALEXIA: Bloqueamos letras y espacios, solo permite números */}
+                    <input 
+                      type="text" 
+                      value={standNumber} 
+                      onChange={(e) => setStandNumber(e.target.value.replace(/\D/g, ''))} 
+                      className="w-full px-4 py-3 border border-gray-200 rounded-xl focus:ring-2 focus:ring-pink-500 outline-none bg-white" 
+                      placeholder="Ej. 24" 
+                    />
+                  </div>
+                   <div>
+                    <label className="block text-sm font-bold text-gray-700 mb-1">Sector</label>
+                    <input type="text" value={sector} onChange={(e) => setSector(e.target.value)} className="w-full px-4 py-3 border border-gray-200 rounded-xl focus:ring-2 focus:ring-pink-500 outline-none bg-white" placeholder="Ej. Carnes" />
                   </div>
                 </div>
               </div>
@@ -126,12 +270,10 @@ export function ProfileView({ onViewChange }: ProfileViewProps) {
               <h3 className="text-lg font-bold text-gray-800 flex items-center gap-2 border-b pb-2">
                 <Lock className="w-5 h-5 text-gray-500" /> Seguridad de Cuenta
               </h3>
-              
               <div>
                 <label className="block text-sm font-bold text-gray-700 mb-1">Contraseña Actual</label>
                 <input type="password" value={currentPassword} onChange={(e) => setCurrentPassword(e.target.value)} className="w-full px-4 py-3 border border-gray-200 rounded-xl focus:ring-2 focus:ring-orange-500 outline-none bg-gray-50 focus:bg-white transition-colors" placeholder="Solo si deseas cambiarla..." />
               </div>
-              
               <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                 <div>
                   <label className="block text-sm font-bold text-gray-700 mb-1">Nueva Contraseña</label>
@@ -144,7 +286,7 @@ export function ProfileView({ onViewChange }: ProfileViewProps) {
               </div>
             </div>
 
-            <button type="submit" className="w-full flex justify-center items-center gap-2 bg-gradient-to-r from-orange-500 via-red-500 to-pink-500 hover:opacity-90 text-white font-bold py-4 rounded-xl shadow-md transition-opacity mt-4">
+            <button type="submit" disabled={loading} className="w-full flex justify-center items-center gap-2 bg-gradient-to-r from-orange-500 via-red-500 to-pink-500 hover:opacity-90 text-white font-bold py-4 rounded-xl shadow-md transition-opacity mt-4">
               <Save className="w-5 h-5" /> Guardar Cambios
             </button>
           </form>
