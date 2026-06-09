@@ -477,11 +477,13 @@ export default function HomeClient({ initialMarkets, serverRole }: HomeClientPro
                 );
               }}
               onRegisterProduct={async (name, price) => {
+                console.log("onRegisterProduct llamado:", name, price); // 👈
                 if (!name.trim() || !price) return;
                 const nombreFormateado = name.trim().charAt(0).toUpperCase() + name.trim().slice(1).toLowerCase();
                 const precioNumerico = parseFloat(price.toString());
                 try {
-                  const headers = await getAuthHeaders(); // 👈 token
+                  const headers = await getAuthHeaders(); 
+                  console.log("Headers:", headers);
                   const data = await pricesAPI.updatePrice({
                     puesto_id: parseInt(market.id, 10),
                     producto_id: 0,

@@ -142,6 +142,7 @@ export function VendorDashboard({
 
   // ── Registrar producto ──
   const handleDashboardRegister = (productName: string, price: number) => {
+    console.log("Registrando producto:", productName, price);
     const newProduct = {
       id: crypto.randomUUID(),
       name: productName,
